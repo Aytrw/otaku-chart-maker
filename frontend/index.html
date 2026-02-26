@@ -575,9 +575,10 @@
             line-height: 1;
         }
         .cover-item:hover .cover-edit-btn { opacity: 1; }
+        .grid-cell:hover .cover-edit-btn { opacity: 1; }
         .cover-edit-btn:hover { background: #ea4c89 !important; }
 
-        /* 裁剪编辑器（占位，后续迁移） */
+        /* 裁剪编辑器 */
         .crop-modal {
             display: none;
             position: fixed;
@@ -623,48 +624,143 @@
             line-height: 1;
         }
         .crop-close-x:hover { color: #333; }
-        .crop-toolbar {
+        .crop-body {
             display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
+            gap: 14px;
+            align-items: stretch;
         }
-        .crop-toolbar button {
-            padding: 5px 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background: #f8f8f8;
-            font-size: 12px;
-            cursor: pointer;
-            transition: background 0.15s, border-color 0.15s;
-        }
-        .crop-toolbar button:hover { background: #eee; border-color: #bbb; }
-        .crop-canvas-wrap {
+        .crop-workspace {
             flex: 1;
-            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .crop-stage {
+            background: #1c1c1c;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #1c1c1c;
-            border-radius: 6px;
-            min-height: 160px;
-            max-height: 52vh;
             padding: 10px;
         }
-        #cropCanvas {
-            display: block;
-            cursor: crosshair;
-            max-width: 100%;
+        .crop-viewport {
+            width: min(360px, 65vw);
+            aspect-ratio: 3 / 4;
+            max-height: 56vh;
+            overflow: hidden;
+            position: relative;
+            border-radius: 6px;
+            border: 2px solid rgba(255,255,255,0.18);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+            cursor: grab;
+            background: #000;
+            touch-action: none;
+        }
+        .crop-viewport.dragging {
+            cursor: grabbing;
+        }
+        .crop-img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform-origin: center center;
+            user-select: none;
+            pointer-events: none;
+        }
+        .crop-grid-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(to right, rgba(255,255,255,0.22) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.22) 1px, transparent 1px);
+            background-size: 33.333% 33.333%;
+            opacity: 0.5;
+        }
+        .crop-controls {
+            background: #f7f7f7;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .crop-control {
+            display: grid;
+            grid-template-columns: 66px 1fr 42px;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        .crop-control input[type="range"] {
+            width: 100%;
+            accent-color: #ea4c89;
+        }
+        .crop-control-value {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            color: #333;
+            font-weight: bold;
+        }
+        .crop-side {
+            width: 180px;
+            min-width: 180px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .crop-preview-card {
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .crop-preview-title {
+            font-size: 12px;
+            color: #777;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        .crop-preview-box {
+            width: 126px;
+            aspect-ratio: 3 / 4;
+            border: 1.5px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 0 auto;
+            position: relative;
+            background: #111;
+        }
+        .crop-preview-tip {
+            font-size: 11px;
+            color: #999;
+            margin-top: 8px;
+            line-height: 1.5;
         }
         .crop-hint {
             font-size: 11px;
-            color: #bbb;
-            text-align: center;
+            color: #888;
+            line-height: 1.6;
         }
         .crop-actions {
             display: flex;
             justify-content: flex-end;
             gap: 8px;
         }
+        .crop-reset-btn {
+            padding: 7px 18px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            color: #666;
+        }
+        .crop-reset-btn:hover { border-color: #bbb; background: #f8f8f8; }
         .crop-cancel-btn {
             padding: 7px 20px;
             border: 1px solid #ddd;
@@ -712,6 +808,9 @@
 
             <!-- 已有封面 -->
             <div class="tab-panel active" id="tabCovers">
+                <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                    <button class="ctrl-btn" style="padding:5px 14px;font-size:13px;" onclick="refreshCovers()" title="刷新封面列表">🔄 刷新封面</button>
+                </div>
                 <div class="cover-grid" id="coverGrid"></div>
             </div>
 
@@ -761,6 +860,58 @@
         </div>
     </div>
 
+    <!-- 裁剪弹窗 -->
+    <div class="crop-modal" id="cropModal">
+        <div class="crop-modal-inner">
+            <div class="crop-header">
+                <div class="crop-title" id="cropTitle">裁剪封面</div>
+                <button class="crop-close-x" onclick="closeCropModal()" aria-label="关闭">×</button>
+            </div>
+            <div class="crop-body">
+                <div class="crop-workspace">
+                    <div class="crop-stage">
+                        <div class="crop-viewport" id="cropViewport">
+                            <img id="cropImage" class="crop-img" alt="crop-source" draggable="false">
+                            <div class="crop-grid-overlay"></div>
+                        </div>
+                    </div>
+                    <div class="crop-controls">
+                        <div class="crop-control">
+                            <span>缩放</span>
+                            <input id="cropZoom" type="range" min="100" max="300" step="1">
+                            <span id="cropZoomValue" class="crop-control-value">100%</span>
+                        </div>
+                        <div class="crop-control">
+                            <span>横向</span>
+                            <input id="cropX" type="range" min="0" max="100" step="1">
+                            <span id="cropXValue" class="crop-control-value">50%</span>
+                        </div>
+                        <div class="crop-control">
+                            <span>纵向</span>
+                            <input id="cropY" type="range" min="0" max="100" step="1">
+                            <span id="cropYValue" class="crop-control-value">50%</span>
+                        </div>
+                    </div>
+                    <div class="crop-hint">拖拽图片可快速调整裁剪区域；该操作只影响当前格子显示，不会修改 covers 原图。</div>
+                </div>
+                <div class="crop-side">
+                    <div class="crop-preview-card">
+                        <div class="crop-preview-title">裁剪预览</div>
+                        <div class="crop-preview-box">
+                            <img id="cropPreviewImage" class="crop-img" alt="crop-preview" draggable="false">
+                        </div>
+                        <div class="crop-preview-tip">预览与格子显示及导出保持一致。</div>
+                    </div>
+                </div>
+            </div>
+            <div class="crop-actions">
+                <button class="crop-reset-btn" onclick="resetCropDraft()">重置</button>
+                <button class="crop-cancel-btn" onclick="closeCropModal()">取消</button>
+                <button class="crop-save-btn" onclick="saveCropDraft()">应用裁剪</button>
+            </div>
+        </div>
+    </div>
+
     <canvas id="exportCanvas"></canvas>
 
 <script>
@@ -780,12 +931,20 @@
 
     // cellImages 保存每个格子的封面 URL。
     const cellImages = new Array(texts.length).fill(null);
+    // cellCrops 保存每个格子的裁剪参数（仅影响当前用户展示与导出，不改原图）。
+    const cellCrops = new Array(texts.length).fill(null);
     // coverUrls 保存 /api/covers 返回的封面列表。
     let coverUrls = [];
     // activeCellIndex 记录当前正在编辑的格子索引。
     let activeCellIndex = -1;
     // _imgCache 缓存已加载图片，减少重复导出时的网络和解码开销。
     const _imgCache = new Map();
+    // 裁剪编辑状态
+    let cropEditingIndex = -1;
+    let cropDraft = null;
+    let cropDragging = false;
+    let cropDragStartX = 0;
+    let cropDragStartY = 0;
 
     // 搜索面板的题材标签分组，用于 Bangumi tag 浏览。
     const allTags = [
@@ -826,7 +985,72 @@
                 <div class="cell-label">${text}</div>
             `;
             container.appendChild(cell);
+            renderCellImage(i, text);
         });
+    }
+
+    function defaultCrop() {
+        return { zoom: 1, centerX: 0.5, centerY: 0.5 };
+    }
+
+    function cloneCrop(crop) {
+        return {
+            zoom: Number(crop?.zoom ?? 1),
+            centerX: Number(crop?.centerX ?? 0.5),
+            centerY: Number(crop?.centerY ?? 0.5),
+        };
+    }
+
+    function clampCrop(crop) {
+        crop.zoom = Math.min(3, Math.max(1, Number(crop.zoom) || 1));
+        const minCenter = 1 / (2 * crop.zoom);
+        const maxCenter = 1 - minCenter;
+        crop.centerX = Math.min(maxCenter, Math.max(minCenter, Number(crop.centerX) || 0.5));
+        crop.centerY = Math.min(maxCenter, Math.max(minCenter, Number(crop.centerY) || 0.5));
+        return crop;
+    }
+
+    function getCellCrop(index) {
+        return clampCrop(cloneCrop(cellCrops[index] || defaultCrop()));
+    }
+
+    function cropTransformStyle(crop) {
+        const tx = (0.5 - crop.centerX) * (crop.zoom - 1) * 100;
+        const ty = (0.5 - crop.centerY) * (crop.zoom - 1) * 100;
+        return `translate(${tx}%, ${ty}%) scale(${crop.zoom})`;
+    }
+
+    function renderCellImage(index, altText = "cover") {
+        const area = document.getElementById(`imgArea${index}`);
+        if (!area) return;
+        area.innerHTML = "";
+
+        const url = cellImages[index];
+        if (!url) {
+            const placeholder = document.createElement("span");
+            placeholder.className = "placeholder";
+            placeholder.textContent = "＋";
+            area.appendChild(placeholder);
+            return;
+        }
+
+        const crop = getCellCrop(index);
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = altText;
+        img.style.transform = cropTransformStyle(crop);
+        area.appendChild(img);
+
+        const editBtn = document.createElement("button");
+        editBtn.className = "cover-edit-btn";
+        editBtn.type = "button";
+        editBtn.title = "裁剪封面";
+        editBtn.textContent = "✂";
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            openCropModal(index);
+        };
+        area.appendChild(editBtn);
     }
 
     // loadCovers 从后端加载 covers 目录中的封面列表。
@@ -838,6 +1062,23 @@
             coverUrls = list.map(n => ({ name: n, url: "covers/" + encodeURIComponent(n) }));
         } catch (e) {
             console.warn("加载封面失败:", e);
+        }
+    }
+
+    // refreshCovers 手动刷新封面列表并重新渲染网格。
+    async function refreshCovers() {
+        await loadCovers();
+        // 如果弹窗打开中，重新渲染已有封面网格
+        const grid = document.getElementById("coverGrid");
+        if (grid) {
+            grid.innerHTML = "";
+            coverUrls.forEach(c => {
+                const img = document.createElement("img");
+                img.src = c.url;
+                img.title = c.name;
+                img.onclick = () => selectCover(c.url);
+                grid.appendChild(img);
+            });
         }
     }
 
@@ -888,7 +1129,8 @@
     function selectCover(url, name) {
         const i = activeCellIndex;
         cellImages[i] = url;
-        document.getElementById(`imgArea${i}`).innerHTML = `<img src="${url}" alt="${name}">`;
+        cellCrops[i] = defaultCrop();
+        renderCellImage(i, name);
         closeModal();
         saveState();
     }
@@ -897,7 +1139,8 @@
     function clearCover() {
         const i = activeCellIndex;
         cellImages[i] = null;
-        document.getElementById(`imgArea${i}`).innerHTML = `<span class="placeholder">＋</span>`;
+        cellCrops[i] = null;
+        renderCellImage(i);
         closeModal();
         saveState();
     }
@@ -910,6 +1153,118 @@
     // 点击弹窗遮罩层关闭
     document.addEventListener("click", (e) => {
         if (e.target === document.getElementById("coverModal")) closeModal();
+        if (e.target === document.getElementById("cropModal")) closeCropModal();
+    });
+
+    function openCropModal(index) {
+        if (!cellImages[index]) return;
+        cropEditingIndex = index;
+        cropDraft = getCellCrop(index);
+        const title = texts[index] || "当前格子";
+        document.getElementById("cropTitle").textContent = `裁剪封面 · 「${title}」`;
+        const src = cellImages[index];
+        document.getElementById("cropImage").src = src;
+        document.getElementById("cropPreviewImage").src = src;
+        syncCropInputs();
+        applyCropDraftToPreview();
+        document.getElementById("cropModal").classList.add("active");
+    }
+
+    function closeCropModal() {
+        document.getElementById("cropModal").classList.remove("active");
+        cropEditingIndex = -1;
+        cropDraft = null;
+        cropDragging = false;
+        document.getElementById("cropViewport").classList.remove("dragging");
+    }
+
+    function syncCropInputs() {
+        if (!cropDraft) return;
+        const zoomVal = Math.round(cropDraft.zoom * 100);
+        const xVal = Math.round(cropDraft.centerX * 100);
+        const yVal = Math.round(cropDraft.centerY * 100);
+        document.getElementById("cropZoom").value = String(zoomVal);
+        document.getElementById("cropX").value = String(xVal);
+        document.getElementById("cropY").value = String(yVal);
+        document.getElementById("cropZoomValue").textContent = `${zoomVal}%`;
+        document.getElementById("cropXValue").textContent = `${xVal}%`;
+        document.getElementById("cropYValue").textContent = `${yVal}%`;
+    }
+
+    function applyCropDraftToPreview() {
+        if (!cropDraft) return;
+        clampCrop(cropDraft);
+        const transform = cropTransformStyle(cropDraft);
+        document.getElementById("cropImage").style.transform = transform;
+        document.getElementById("cropPreviewImage").style.transform = transform;
+        syncCropInputs();
+    }
+
+    function resetCropDraft() {
+        cropDraft = defaultCrop();
+        applyCropDraftToPreview();
+    }
+
+    function saveCropDraft() {
+        if (cropEditingIndex < 0 || !cropDraft) return;
+        cellCrops[cropEditingIndex] = clampCrop(cloneCrop(cropDraft));
+        renderCellImage(cropEditingIndex);
+        saveState();
+        closeCropModal();
+    }
+
+    document.getElementById("cropZoom").addEventListener("input", (e) => {
+        if (!cropDraft) return;
+        cropDraft.zoom = Number(e.target.value) / 100;
+        cropDraft = clampCrop(cropDraft);
+        applyCropDraftToPreview();
+    });
+    document.getElementById("cropX").addEventListener("input", (e) => {
+        if (!cropDraft) return;
+        cropDraft.centerX = Number(e.target.value) / 100;
+        cropDraft = clampCrop(cropDraft);
+        applyCropDraftToPreview();
+    });
+    document.getElementById("cropY").addEventListener("input", (e) => {
+        if (!cropDraft) return;
+        cropDraft.centerY = Number(e.target.value) / 100;
+        cropDraft = clampCrop(cropDraft);
+        applyCropDraftToPreview();
+    });
+
+    const cropViewport = document.getElementById("cropViewport");
+    cropViewport.addEventListener("pointerdown", (e) => {
+        if (!cropDraft) return;
+        cropDragging = true;
+        cropDragStartX = e.clientX;
+        cropDragStartY = e.clientY;
+        cropViewport.classList.add("dragging");
+        cropViewport.setPointerCapture(e.pointerId);
+    });
+    cropViewport.addEventListener("pointermove", (e) => {
+        if (!cropDragging || !cropDraft) return;
+        const dx = e.clientX - cropDragStartX;
+        const dy = e.clientY - cropDragStartY;
+        cropDragStartX = e.clientX;
+        cropDragStartY = e.clientY;
+
+        const rect = cropViewport.getBoundingClientRect();
+        const zoomDelta = Math.max(0.001, cropDraft.zoom - 1);
+        cropDraft.centerX -= dx / (rect.width * zoomDelta);
+        cropDraft.centerY -= dy / (rect.height * zoomDelta);
+        cropDraft = clampCrop(cropDraft);
+        applyCropDraftToPreview();
+    });
+    cropViewport.addEventListener("pointerup", (e) => {
+        cropDragging = false;
+        cropViewport.classList.remove("dragging");
+        if (cropViewport.hasPointerCapture(e.pointerId)) {
+            cropViewport.releasePointerCapture(e.pointerId);
+        }
+    });
+    cropViewport.addEventListener("pointercancel", () => {
+        cropDragging = false;
+        cropViewport.classList.remove("dragging");
     });
 
     // switchTab 切换弹窗内的 tab 面板。
@@ -1297,7 +1652,7 @@
             await fetch("/api/state", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cells: cellImages })
+                body: JSON.stringify({ cells: cellImages, crops: cellCrops })
             });
         } catch (e) {
             console.warn("保存状态失败:", e);
@@ -1314,8 +1669,12 @@
             data.cells.forEach((url, i) => {
                 if (url && i < cellImages.length) {
                     cellImages[i] = url;
-                    document.getElementById(`imgArea${i}`).innerHTML =
-                        `<img src="${url}" alt="cover">`;
+                    if (Array.isArray(data.crops) && data.crops[i]) {
+                        cellCrops[i] = clampCrop(cloneCrop(data.crops[i]));
+                    } else {
+                        cellCrops[i] = defaultCrop();
+                    }
+                    renderCellImage(i);
                 }
             });
         } catch (e) {
@@ -1389,7 +1748,7 @@
                 ctx.beginPath();
                 ctx.rect(x, y, boxW, boxH - labelH);
                 ctx.clip();
-                coverDraw(ctx, imgs[i], x, y, boxW, boxH - labelH);
+                coverDraw(ctx, imgs[i], x, y, boxW, boxH - labelH, getCellCrop(i));
                 ctx.restore();
             }
 
@@ -1438,7 +1797,8 @@
     }
 
     // coverDraw 使用 cover 方式绘制图片，行为等价于 CSS object-fit: cover。
-    function coverDraw(ctx, img, x, y, w, h) {
+    function coverDraw(ctx, img, x, y, w, h, crop = defaultCrop()) {
+        crop = clampCrop(cloneCrop(crop));
         const imageRatio = img.width / img.height;
         const boxRatio = w / h;
         let sx;
@@ -1458,7 +1818,18 @@
             sy = (img.height - sh) / 2;
         }
 
-        ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+        const cropW = sw / crop.zoom;
+        const cropH = sh / crop.zoom;
+        const centerX = sx + crop.centerX * sw;
+        const centerY = sy + crop.centerY * sh;
+        const minSX = sx;
+        const maxSX = sx + sw - cropW;
+        const minSY = sy;
+        const maxSY = sy + sh - cropH;
+        const finalSX = Math.min(maxSX, Math.max(minSX, centerX - cropW / 2));
+        const finalSY = Math.min(maxSY, Math.max(minSY, centerY - cropH / 2));
+
+        ctx.drawImage(img, finalSX, finalSY, cropW, cropH, x, y, w, h);
     }
 
     // 启动流程：初始化网格、标签浏览器，再加载封面和状态。
