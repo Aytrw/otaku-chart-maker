@@ -39,6 +39,7 @@ type handler struct {
 	coversDir string
 	stateFile string
 	bgm       *api.Client
+	vndb      *api.VNDBClient
 	mux       *http.ServeMux
 	stateMu   sync.RWMutex
 }
@@ -67,6 +68,7 @@ func NewHandler(execDir string, frontend fs.FS) (http.Handler, int, error) {
 	}
 
 	h.bgm = api.NewClient(h.coversDir)
+	h.vndb = api.NewVNDBClient(h.coversDir, "")
 	h.routes()
 
 	files, err := h.coverFileNames()
@@ -92,6 +94,7 @@ func (h *handler) routes() {
 	h.mux.HandleFunc("/api/browse", h.handleBrowse)
 	h.mux.HandleFunc("/api/download-cover", h.handleDownloadCover)
 	h.mux.HandleFunc("/api/upload-cover", h.handleUploadCover)
+	h.mux.HandleFunc("/api/vndb/search", h.handleVNDBSearch)
 }
 
 // handleIndex 返回前端首页内容。
@@ -284,7 +287,62 @@ func (h *handler) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, resp)
 }
 
+// handleVNDBSearch 处理 VNDB 关键词搜索请求（POST /api/vndb/search）。
+func (h *handler) handleVNDBSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Keyword string `json:"keyword"`
+		Page    int    `json:"page"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "解析请求失败"})
+		return
+	}
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+
+	resp, err := h.vndb.SearchVN(req.Keyword, req.Page, 20)
+	if err != nil {
+		h.writeAPIError(w, err)
+		return
+	}
+
+	// 将 VNDB 结果映射为前端通用的卡片格式
+	type card struct {
+		ID     string  `json:"id"`
+		Name   string  `json:"name"`
+		NameCN string  `json:"name_cn"`
+		Cover  string  `json:"cover"`
+		Score  float64 `json:"score"`
+		Source string  `json:"source"`
+	}
+
+	cards := make([]card, 0, len(resp.Results))
+	for _, vn := range resp.Results {
+		cards = append(cards, card{
+			ID:     vn.ID,
+			Name:   vn.Title,
+			NameCN: vn.Alttitle,
+			Cover:  vn.Image.BestURL(),
+			Score:  vn.Rating / 10,
+			Source: "vndb",
+		})
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"results": cards,
+		"total":   resp.Count,
+		"more":    resp.More,
+	})
+}
+
 // handleDownloadCover 处理封面下载请求（POST /api/download-cover）。
+// source 字段可选，值为 "vndb" 时使用 VNDB 客户端下载，否则默认 Bangumi。
 func (h *handler) handleDownloadCover(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -294,13 +352,20 @@ func (h *handler) handleDownloadCover(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		URL      string `json:"url"`
 		Filename string `json:"filename"`
+		Source   string `json:"source"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "解析请求失败"})
 		return
 	}
 
-	result, err := h.bgm.DownloadCover(req.URL, req.Filename)
+	var result *api.DownloadResult
+	var err error
+	if req.Source == "vndb" {
+		result, err = h.vndb.DownloadCover(req.URL, req.Filename)
+	} else {
+		result, err = h.bgm.DownloadCover(req.URL, req.Filename)
+	}
 	if err != nil {
 		h.writeAPIError(w, err)
 		return
