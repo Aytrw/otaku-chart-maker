@@ -451,7 +451,8 @@
         }
         .search-item-type.type-anime { background: #e3f2fd; color: #1565c0; }
         .search-item-type.type-game  { background: #fce4ec; color: #c62828; }
-        .search-item-type.type-book  { background: #e8f5e9; color: #2e7d32; }
+        .search-item-type.type-manga { background: #fff3e0; color: #e65100; }
+        .search-item-type.type-novel { background: #f3e5f5; color: #7b1fa2; }
         .search-item-score {
             font-size: 10px;
             color: #ff9800;
@@ -633,46 +634,41 @@
 
         /* 标签浏览器 */
         .tag-browser {
-            max-height: 220px;
-            overflow-y: auto;
             border: 1px solid #eee;
             border-radius: 8px;
-            padding: 10px 12px;
+            padding: 8px 10px;
             background: #fafafa;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
-        .tag-browser::-webkit-scrollbar { width: 4px; }
-        .tag-browser::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
         .tag-cat-row {
             display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            margin-bottom: 7px;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 5px;
         }
         .tag-cat-row:last-child { margin-bottom: 0; }
         .tag-cat-label {
             font-size: 11px;
             color: #999;
             white-space: nowrap;
-            padding-top: 4px;
-            min-width: 36px;
+            min-width: 32px;
             font-weight: bold;
         }
         .tag-cat-group {
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
+            gap: 4px;
         }
         .tag-pick-btn {
-            padding: 3px 10px;
+            padding: 2px 8px;
             border: 1.5px solid #ddd;
-            border-radius: 14px;
+            border-radius: 12px;
             background: #fff;
             font-size: 12px;
             cursor: pointer;
             color: #555;
             transition: all 0.15s;
-            line-height: 1.6;
+            line-height: 1.5;
         }
         .tag-pick-btn:hover { border-color: #ea4c89; color: #ea4c89; }
         .tag-pick-btn.active {
@@ -1022,7 +1018,7 @@
                         <button class="type-btn" data-type="anime" onclick="setSubjectType('anime')">🎥 动画</button>
                         <button class="type-btn" data-type="manga" onclick="setSubjectType('manga')">📖 漫画</button>
                         <button class="type-btn" data-type="novel" onclick="setSubjectType('novel')">📝 轻小说</button>
-                        <button class="type-btn" data-type="galgame" onclick="setSubjectType('galgame')">🎮 GALGAME</button>
+                        <button class="type-btn" data-type="game" onclick="setSubjectType('game')">🎮 游戏</button>
                     </div>
                     <div class="section-label">排序方式</div>
                     <div class="search-sort-row">
@@ -1159,13 +1155,13 @@
         { label: "情感", tags: ["治愈", "搞笑", "热血", "感动", "催泪", "致郁", "恐怖", "温馨", "燃", "虐心", "压抑", "紧张"] },
         { label: "恋爱", tags: ["恋爱", "青春", "百合", "BL", "后宫", "纯爱", "暗恋", "三角关系", "初恋", "姐弟恋"] },
         { label: "日常", tags: ["日常", "校园", "职场", "美食", "音乐", "偶像", "运动", "旅行", "料理", "家庭", "社团"] },
-        { label: "战斗", tags: ["战斗", "冒险", "超能力", "魔法少女", "竞技", "武术", "军事", "格斗", "生存"] },
+        { label: "战斗", tags: ["战斗", "冒险", "超能力", "竞技", "格斗", "军事", "机战", "武术", "生存", "魔法少女"] },
         { label: "推理", tags: ["推理", "悬疑", "智斗", "犯罪", "惊悚", "心理", "侦探", "复仇", "解谜"] },
-        { label: "幻想", tags: ["奇幻", "科幻", "机甲", "赛博朋克", "魔法", "妖怪", "吸血鬼", "太空", "人外"] },
-        { label: "背景", tags: ["异世界", "穿越", "转生", "架空", "末日", "史诗", "神话", "历史", "宫廷", "近未来", "废土"] },
+        { label: "幻想", tags: ["奇幻", "科幻", "机甲", "赛博朋克", "魔法", "妖怪", "吸血鬼", "玄幻", "人外"] },
+        { label: "背景", tags: ["异世界", "穿越", "转生", "架空", "末日", "史诗", "神话", "历史", "宫廷", "近未来", "废土", "太空"] },
         { label: "叙事", tags: ["剧情", "原创", "改编", "写实", "叙述性诡计", "时间循环", "群像剧", "意识流"] },
-        { label: "角色", tags: ["群像", "伪娘", "兽耳", "傲娇", "病娇", "天然呆", "腹黑", "女仆", "大小姐", "龙傲天"] },
-        { label: "受众", tags: ["少年", "少女", "青年", "萌系", "子供向", "猎奇", "乙女向", "女性向"] },
+        { label: "角色", tags: ["群像", "伪娘", "兽耳", "傲娇", "病娇", "天然呆", "腹黑", "女仆", "大小姐", "萌系"] },
+        { label: "受众", tags: ["少年", "少女", "青年", "乙女", "GL", "子供向", "猎奇", "女性向"] },
     ];
 
     // 搜索状态
@@ -1910,7 +1906,8 @@
             const typeLabel = item.type_label || "";
             const typeClass = typeLabel === "动画" ? "type-anime"
                             : typeLabel === "游戏" ? "type-game"
-                            : typeLabel === "书籍" ? "type-book" : "";
+                            : typeLabel === "漫画" ? "type-manga"
+                            : typeLabel === "轻小说" ? "type-novel" : "";
             const score = item.score ? `⭐${item.score}` : "";
 
             el.innerHTML = `
