@@ -28,20 +28,8 @@ func main() {
 	devMode := flag.Bool("dev", false, "开发模式：从 frontend/ 目录实时读取前端文件")
 	flag.Parse()
 
-	// 发布模式使用可执行文件目录，开发模式使用当前工作目录。
-	execPath, err := os.Executable()
-	if err != nil {
-		log.Fatalf("获取可执行文件路径失败: %v", err)
-	}
-
-	baseDir := filepath.Dir(execPath)
-	if *devMode {
-		cwd, cwdErr := os.Getwd()
-		if cwdErr != nil {
-			log.Fatalf("获取当前工作目录失败: %v", cwdErr)
-		}
-		baseDir = cwd
-	}
+	// 确定数据目录：dev 用 cwd，release 用 exe 目录，无 covers/ 时回退 cwd（兼容 go run）。
+	baseDir := resolveBaseDir(*devMode)
 
 	frontend, err := loadFrontendFS(*devMode, baseDir)
 	if err != nil {
@@ -66,6 +54,32 @@ func main() {
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), h); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}
+}
+
+// resolveBaseDir 确定数据根目录（dev→cwd，release→exe 目录，无 covers/ 时回退 cwd）。
+func resolveBaseDir(devMode bool) string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("获取当前工作目录失败: %v", err)
+	}
+
+	if devMode {
+		return cwd
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		log.Printf("获取可执行文件路径失败，使用当前目录: %v", err)
+		return cwd
+	}
+
+	execDir := filepath.Dir(execPath)
+	// 检查可执行文件目录下是否有 covers/，没有则说明是 go run 的临时目录
+	if info, statErr := os.Stat(filepath.Join(execDir, "covers")); statErr == nil && info.IsDir() {
+		return execDir
+	}
+
+	return cwd
 }
 
 // openBrowser 按当前操作系统选择默认打开 URL 的命令。
