@@ -553,18 +553,6 @@
             outline: none;
         }
         .sort-select:focus { border-color: #ea4c89; }
-        .order-btn {
-            padding: 6px 10px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 13px;
-            background: #fff;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: border-color .15s, color .15s, background .15s;
-        }
-        .order-btn:hover { border-color: #ea4c89; color: #ea4c89; }
-        .order-btn.active { border-color: #ea4c89; background: #ea4c89; color: #fff; }
 
         /* 封面编辑按钮 */
         .cover-edit-btn {
@@ -750,8 +738,6 @@
                         <option value="heat" selected>按热度</option>
                         <option value="match">按匹配度</option>
                     </select>
-                    <button class="order-btn active" id="orderDesc" onclick="setOrder('desc')">↓ 降序</button>
-                    <button class="order-btn" id="orderAsc" onclick="setOrder('asc')">↑ 升序</button>
                 </div>
                 <!-- 关键词搜索 -->
                 <div class="search-bar">
@@ -816,7 +802,6 @@
     let currentPage = 1;            // 当前页码
     let currentTotal = 0;           // 搜索结果总数
     let currentSubjectType = "all"; // 类型筛选
-    let currentOrder = "desc";      // 排序方向
     const PAGE_SIZE = 20;           // 每页条数
     let _searchTimer = null;        // 搜索防抖计时器
     let _loadingRequests = 0;       // 正在进行的加载请求数量
@@ -1009,14 +994,6 @@
         if (hasSearchCondition()) doSearch();
     }
 
-    // setOrder 切换排序方向。
-    function setOrder(order) {
-        currentOrder = order;
-        document.getElementById("orderDesc").classList.toggle("active", order === "desc");
-        document.getElementById("orderAsc").classList.toggle("active", order === "asc");
-        if (hasSearchCondition()) doSearch();
-    }
-
     // onSortChange 排序字段变更时触发搜索。
     function onSortChange() {
         if (hasSearchCondition()) doSearch();
@@ -1053,7 +1030,6 @@
             sort: document.getElementById("sortSelect").value,
             keyword: document.getElementById("searchInput").value.trim(),
             subjectType: currentSubjectType,
-            order: currentOrder,
             tags: [...currentTags],
         };
     }
@@ -1064,7 +1040,6 @@
             params.tags,
             params.keyword,
             params.subjectType,
-            params.order,
             params.sort,
             page,
         ]);
@@ -1094,7 +1069,6 @@
             offset,
             limit: PAGE_SIZE,
             sort: params.sort,
-            order: params.order,
             subjectType: params.subjectType,
         };
         if (params.tags.length > 0) body.tags = params.tags;
