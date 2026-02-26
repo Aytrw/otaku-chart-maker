@@ -45,23 +45,23 @@ func (e requestError) Unwrap() error {
 	return ErrBadRequest
 }
 
-// SubjectType 描述 Bangumi 条目类型的筛选参数。
+// SubjectType 描述 Bangumi 条目的筛选参数。
 type SubjectType struct {
 	TypeID  int    // Bangumi 类型 ID: 1=书籍 2=动画 4=游戏
 	MetaTag string // 子类标签，为空表示不筛选子类
 }
 
-// TypeMap 将前端类型名映射到 Bangumi 条目类型和子类标签。
+// TypeMap 将前端类型名映射到 Bangumi 条目类型。
 var TypeMap = map[string]SubjectType{
-	"anime":   {TypeID: 2},
-	"manga":   {TypeID: 1, MetaTag: "漫画"},
-	"novel":   {TypeID: 1, MetaTag: "轻小说"},
-	"galgame": {TypeID: 4, MetaTag: "Galgame"},
+	"anime": {TypeID: 2},
+	"manga": {TypeID: 1, MetaTag: "漫画"},
+	"novel": {TypeID: 1, MetaTag: "小说"},
+	"game":  {TypeID: 4},
 }
 
 // TypeLabels 将 Bangumi 类型 ID 映射到中文显示名。
 var TypeLabels = map[int]string{
-	1: "书籍", 2: "动画", 3: "音乐", 4: "游戏", 6: "三次元",
+	1: "书籍", 2: "动画", 4: "游戏",
 }
 
 // 封面下载允许的图片扩展名。
@@ -72,6 +72,18 @@ var coverExts = map[string]bool{
 
 // 文件名中不允许的字符。
 var unsafeChars = regexp.MustCompile(`[<>:"/\\|?*]`)
+
+// bookLabelFromPlatform 根据 v0 API 的 platform 字段区分书籍子类型。
+func bookLabelFromPlatform(platform string) string {
+	switch platform {
+	case "漫画":
+		return "漫画"
+	case "小说":
+		return "轻小说"
+	default:
+		return "书籍"
+	}
+}
 
 // 浏览接口允许的排序方式。
 var validSorts = map[string]bool{
@@ -222,18 +234,19 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 		apiBody["keyword"] = req.Keyword
 	}
 	filter := map[string]any{}
-	if hasTags {
-		filter["tag"] = req.Tags
-	}
+	tags := append([]string{}, req.Tags...)
 	if hasType {
 		filter["type"] = []int{st.TypeID}
 		if st.MetaTag != "" {
-			filter["meta_tags"] = []string{st.MetaTag}
+			tags = append(tags, st.MetaTag)
 		}
+	} else {
+		filter["type"] = []int{1, 2, 4} // "全部"只搜 ACGN 类型
 	}
-	if len(filter) > 0 {
-		apiBody["filter"] = filter
+	if len(tags) > 0 {
+		filter["tag"] = tags
 	}
+	apiBody["filter"] = filter
 
 	// 请求 API（带缓存）
 	apiURL := fmt.Sprintf("%s?limit=%d&offset=%d", bgmV0SearchURL, req.Limit, req.Offset)
@@ -242,16 +255,17 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 		return nil, err
 	}
 
-	// 解析 v0 API 响应格式
+	// 解析 v0 API 响应格式（platform 字段区分漫画/小说等书籍子类型）
 	var raw struct {
 		Total int `json:"total"`
 		Data  []struct {
-			ID     int       `json:"id"`
-			Name   string    `json:"name"`
-			NameCN string    `json:"name_cn"`
-			Images bgmImages `json:"images"`
-			Type   int       `json:"type"`
-			Score  float64   `json:"score"`
+			ID       int       `json:"id"`
+			Name     string    `json:"name"`
+			NameCN   string    `json:"name_cn"`
+			Images   bgmImages `json:"images"`
+			Type     int       `json:"type"`
+			Score    float64   `json:"score"`
+			Platform string    `json:"platform"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rawJSON, &raw); err != nil {
@@ -260,12 +274,20 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 
 	results := make([]BrowseResult, 0, len(raw.Data))
 	for _, it := range raw.Data {
+		label := TypeLabels[it.Type]
+		if it.Type == 1 {
+			label = bookLabelFromPlatform(it.Platform)
+		}
+		// 书籍子类型精确过滤：用 platform 字段排除不匹配的条目
+		if hasType && st.TypeID == 1 && st.MetaTag != "" && it.Platform != st.MetaTag {
+			continue
+		}
 		results = append(results, BrowseResult{
 			ID:        it.ID,
 			Name:      it.Name,
 			NameCN:    it.NameCN,
 			Cover:     it.Images.bestURL(),
-			TypeLabel: TypeLabels[it.Type],
+			TypeLabel: label,
 			Score:     it.Score,
 		})
 	}
