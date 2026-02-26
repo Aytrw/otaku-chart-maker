@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACGN生涯个人喜好表</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #f0f0f0;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .ctrl-box {
+            margin-top: 16px;
+            margin-bottom: 16px;
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+        }
+
+        .ctrl-btn {
+            background-color: #ea4c89;
+            color: #fff;
+            border: none;
+            padding: 10px 30px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 3px 10px rgba(234, 76, 137, 0.25);
+            transition: background-color 0.3s;
+        }
+        .ctrl-btn:hover { background-color: #f082ac; }
+
+        .grid-wrapper {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 4px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+        }
+
+        .grid-title {
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(6, 150px);
+            gap: 0;
+        }
+
+        .grid-cell {
+            width: 150px;
+            height: 240px;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+            border-right: 2px solid #333;
+            border-bottom: 2px solid #333;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            transition: opacity 0.15s;
+        }
+        .grid-cell:hover { opacity: 0.85; }
+
+        /* 首行首列边框 */
+        .grid-cell:nth-child(6n+1) { border-left: 2px solid #333; }
+        .grid-cell:nth-child(-n+6) { border-top: 2px solid #333; }
+
+        .cell-img-area {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+        }
+        .cell-img-area img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            image-rendering: auto;
+        }
+        .cell-img-area .placeholder {
+            color: #ccc;
+            font-size: 28px;
+            user-select: none;
+        }
+
+        .cell-label {
+            height: 36px;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f0f0f0;
+            border-top: 1px solid #ccc;
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            white-space: nowrap;
+            padding: 0 4px;
+        }
+
+        /* ========== 封面选择弹窗 ========== */
+        .cover-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .cover-modal.active { display: flex; }
+
+        .cover-modal-inner {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 820px;
+            max-height: 80vh;
+            overflow-y: auto;
+            width: 90%;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        }
+        .cover-modal-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #333;
+            text-align: center;
+        }
+        .cover-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 8px;
+        }
+        .cover-item {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid #ddd;
+            transition: all 0.2s;
+            aspect-ratio: 3/4;
+        }
+        .cover-item:hover {
+            border-color: #ea4c89;
+            box-shadow: 0 0 8px rgba(234,76,137,0.35);
+            transform: scale(1.04);
+        }
+        .cover-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            image-rendering: auto;
+        }
+        .cover-modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .cover-modal-btn {
+            padding: 7px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .cover-modal-btn.close-btn { background: #eee; color: #555; }
+        .cover-modal-btn.close-btn:hover { background: #ddd; }
+        .cover-modal-btn.clear-btn { background: #ff6b6b; color: #fff; }
+        .cover-modal-btn.clear-btn:hover { background: #ee5a5a; }
+
+        .no-covers-msg {
+            text-align: center;
+            color: #999;
+            padding: 36px 20px;
+            font-size: 13px;
+            line-height: 2;
+            grid-column: 1 / -1;
+        }
+
+        /* Tab 切换 */
+        .modal-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 14px;
+            border-bottom: 2px solid #eee;
+        }
+        .modal-tab {
+            flex: 1;
+            padding: 10px 0;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #999;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            background: none;
+            border-top: none; border-left: none; border-right: none;
+        }
+        .modal-tab:hover { color: #666; }
+        .modal-tab.active {
+            color: #ea4c89;
+            border-bottom-color: #ea4c89;
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* 搜索面板（占位，后续迁移） */
+        .search-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .search-bar input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-bar input:focus { border-color: #ea4c89; }
+        .search-bar select {
+            padding: 8px 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #fff;
+            cursor: pointer;
+            outline: none;
+        }
+        .search-bar select:focus { border-color: #ea4c89; }
+        .search-bar button {
+            padding: 8px 18px;
+            background: #ea4c89;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .search-bar button:hover { background: #f082ac; }
+        .search-bar button:disabled { background: #ccc; cursor: not-allowed; }
+
+        .search-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .search-item {
+            cursor: pointer;
+            border: 2px solid #eee;
+            border-radius: 6px;
+            overflow: hidden;
+            transition: all 0.2s;
+            background: #fff;
+        }
+        .search-item:hover {
+            border-color: #ea4c89;
+            box-shadow: 0 2px 12px rgba(234,76,137,0.2);
+            transform: translateY(-2px);
+        }
+        .search-item-img {
+            width: 100%;
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            display: block;
+            background: #f5f5f5;
+        }
+        .search-item-info {
+            padding: 6px 8px;
+        }
+        .search-item-name {
+            font-size: 12px;
+            font-weight: bold;
+            color: #333;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .search-item-sub {
+            font-size: 11px;
+            color: #999;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .search-status {
+            text-align: center;
+            padding: 30px 20px;
+            color: #999;
+            font-size: 13px;
+        }
+        .search-status .spinner {
+            display: inline-block;
+            width: 20px; height: 20px;
+            border: 3px solid #eee;
+            border-top-color: #ea4c89;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-bottom: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 下载中覆盖层 */
+        .download-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .download-overlay-box {
+            background: #fff;
+            padding: 24px 36px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .download-overlay-box .spinner {
+            width: 28px; height: 28px;
+            border: 3px solid #eee;
+            border-top-color: #ea4c89;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        /* 标签浏览 */
+        .tag-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .tag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            background: #fce4ec;
+            color: #c62828;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .tag-badge .remove-tag {
+            cursor: pointer;
+            font-size: 14px;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .tag-badge .remove-tag:hover { opacity: 1; }
+        .result-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #999;
+        }
+        .search-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px 6px;
+        }
+        .search-item-type {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        .search-item-type.type-anime { background: #e3f2fd; color: #1565c0; }
+        .search-item-type.type-game  { background: #fce4ec; color: #c62828; }
+        .search-item-type.type-book  { background: #e8f5e9; color: #2e7d32; }
+        .search-item-score {
+            font-size: 10px;
+            color: #ff9800;
+            font-weight: bold;
+        }
+        .load-more-wrapper {
+            text-align: center;
+            padding: 16px 0;
+            grid-column: 1 / -1;
+        }
+        .load-more-btn {
+            padding: 8px 32px;
+            background: #fff;
+            border: 2px solid #ea4c89;
+            color: #ea4c89;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .load-more-btn:hover {
+            background: #ea4c89;
+            color: #fff;
+        }
+        .load-more-btn:disabled { background: #eee; border-color: #ccc; color: #999; cursor: not-allowed; }
+
+        /* 类型筛选 */
+        .type-filter-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .type-btn {
+            padding: 4px 14px;
+            border: 1.5px solid #ddd;
+            border-radius: 14px;
+            background: #fff;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.15s;
+        }
+        .type-btn:hover { border-color: #ea4c89; color: #ea4c89; }
+        .type-btn.active {
+            background: #ea4c89;
+            border-color: #ea4c89;
+            color: #fff;
+        }
+
+        /* 分页 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            padding: 12px 0 4px;
+            flex-wrap: wrap;
+            grid-column: 1 / -1;
+        }
+        .page-btn {
+            min-width: 32px;
+            height: 32px;
+            padding: 0 8px;
+            border: 1.5px solid #ddd;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.15s;
+        }
+        .page-btn:hover { border-color: #ea4c89; color: #ea4c89; }
+        .page-btn.active { background: #ea4c89; border-color: #ea4c89; color: #fff; font-weight: bold; }
+        .page-btn:disabled { background: #f5f5f5; color: #ccc; cursor: not-allowed; border-color: #eee; }
+        .page-ellipsis { color: #aaa; font-size: 13px; padding: 0 4px; }
+
+        /* 标签浏览器 */
+        .tag-browser {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            padding: 8px 10px;
+            background: #fafafa;
+            margin-bottom: 10px;
+        }
+        .tag-browser::-webkit-scrollbar { width: 4px; }
+        .tag-browser::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+        .tag-cat-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 7px;
+        }
+        .tag-cat-row:last-child { margin-bottom: 0; }
+        .tag-cat-label {
+            font-size: 11px;
+            color: #aaa;
+            white-space: nowrap;
+            padding-top: 4px;
+            min-width: 48px;
+            font-weight: bold;
+        }
+        .tag-cat-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .tag-pick-btn {
+            padding: 3px 10px;
+            border: 1.5px solid #ddd;
+            border-radius: 14px;
+            background: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.15s;
+            line-height: 1.6;
+        }
+        .tag-pick-btn:hover { border-color: #ea4c89; color: #ea4c89; }
+        .tag-pick-btn.active {
+            background: #ea4c89;
+            border-color: #ea4c89;
+            color: #fff;
+        }
+        .search-sort-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .search-sort-row label {
+            font-size: 12px;
+            color: #999;
+            white-space: nowrap;
+        }
+        .sort-select {
+            flex: 1;
+            padding: 6px 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #fff;
+            cursor: pointer;
+            outline: none;
+        }
+        .sort-select:focus { border-color: #ea4c89; }
+        .order-btn {
+            padding: 6px 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #fff;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: border-color .15s, color .15s, background .15s;
+        }
+        .order-btn:hover { border-color: #ea4c89; color: #ea4c89; }
+        .order-btn.active { border-color: #ea4c89; background: #ea4c89; color: #fff; }
+
+        /* 封面编辑按钮 */
+        .cover-edit-btn {
+            position: absolute;
+            top: 4px; right: 4px;
+            width: 26px; height: 26px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+        .cover-item:hover .cover-edit-btn { opacity: 1; }
+        .cover-edit-btn:hover { background: #ea4c89 !important; }
+
+        /* 裁剪编辑器（占位，后续迁移） */
+        .crop-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.78);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+        .crop-modal.active { display: flex; }
+        .crop-modal-inner {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            width: min(700px, 95vw);
+            max-height: 94vh;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.45);
+        }
+        .crop-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .crop-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 80%;
+        }
+        .crop-close-x {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #aaa;
+            padding: 0 2px;
+            line-height: 1;
+        }
+        .crop-close-x:hover { color: #333; }
+        .crop-toolbar {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .crop-toolbar button {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f8f8f8;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .crop-toolbar button:hover { background: #eee; border-color: #bbb; }
+        .crop-canvas-wrap {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1c1c1c;
+            border-radius: 6px;
+            min-height: 160px;
+            max-height: 52vh;
+            padding: 10px;
+        }
+        #cropCanvas {
+            display: block;
+            cursor: crosshair;
+            max-width: 100%;
+        }
+        .crop-hint {
+            font-size: 11px;
+            color: #bbb;
+            text-align: center;
+        }
+        .crop-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .crop-cancel-btn {
+            padding: 7px 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f5f5f5;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .crop-save-btn {
+            padding: 7px 22px;
+            border: none;
+            border-radius: 5px;
+            background: #ea4c89;
+            color: #fff;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .crop-save-btn:hover { background: #d93a77; }
+        .crop-save-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        #exportCanvas { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="grid-wrapper">
+        <div class="grid-title">ACGN生涯个人喜好表</div>
+        <div class="grid-container" id="gridContainer"></div>
+    </div>
+
+    <div class="ctrl-box">
+        <button class="ctrl-btn" onclick="saveImage()">💾 保存为图片</button>
+    </div>
+
+    <!-- 封面选择弹窗 -->
+    <div class="cover-modal" id="coverModal">
+        <div class="cover-modal-inner">
+            <div class="cover-modal-title" id="modalTitle">选择封面</div>
+
+            <div class="modal-tabs">
+                <button class="modal-tab active" data-tab="covers" onclick="switchTab('covers')">📁 已有封面</button>
+                <button class="modal-tab" data-tab="search" onclick="switchTab('search')">🔍 搜索作品</button>
+            </div>
+
+            <!-- 已有封面 -->
+            <div class="tab-panel active" id="tabCovers">
+                <div class="cover-grid" id="coverGrid"></div>
+            </div>
+
+            <!-- 搜索作品 -->
+            <div class="tab-panel" id="tabSearch">
+                <!-- 标签浏览器 -->
+                <div class="tag-browser" id="tagBrowser"></div>
+                <!-- 已选标签 -->
+                <div class="tag-badges" id="tagBadges"></div>
+                <!-- 类型筛选 -->
+                <div class="type-filter-row" id="typeFilterRow">
+                    <button class="type-btn active" data-type="all" onclick="setSubjectType('all')">📦 全部</button>
+                    <button class="type-btn" data-type="anime" onclick="setSubjectType('anime')">🎥 动画</button>
+                    <button class="type-btn" data-type="manga" onclick="setSubjectType('manga')">📖 漫画</button>
+                    <button class="type-btn" data-type="novel" onclick="setSubjectType('novel')">📝 轻小说</button>
+                    <button class="type-btn" data-type="galgame" onclick="setSubjectType('galgame')">🎮 GALGAME</button>
+                </div>
+                <!-- 排序 -->
+                <div class="search-sort-row">
+                    <label>排序：</label>
+                    <select class="sort-select" id="sortSelect" onchange="onSortChange()">
+                        <option value="rank">按排名</option>
+                        <option value="score">按评分</option>
+                        <option value="heat" selected>按热度</option>
+                        <option value="match">按匹配度</option>
+                    </select>
+                    <button class="order-btn active" id="orderDesc" onclick="setOrder('desc')">↓ 降序</button>
+                    <button class="order-btn" id="orderAsc" onclick="setOrder('asc')">↑ 升序</button>
+                </div>
+                <!-- 关键词搜索 -->
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="输入关键词进一步筛选（可选）..." onkeydown="if(event.key==='Enter') doSearch()">
+                    <button onclick="doSearch()" id="searchBtn">搜索</button>
+                </div>
+                <!-- 结果信息 -->
+                <div id="resultInfo" class="result-info" style="display:none;"><span id="resultCount"></span></div>
+                <!-- 搜索结果 -->
+                <div id="searchResults">
+                    <div class="search-status">选择上方题材标签，或直接输入关键词搜索</div>
+                </div>
+                <!-- 分页 -->
+                <div id="pagination" class="pagination"></div>
+            </div>
+
+            <div class="cover-modal-actions">
+                <button class="cover-modal-btn clear-btn" onclick="clearCover()">清除封面</button>
+                <button class="cover-modal-btn close-btn" onclick="closeModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="exportCanvas"></canvas>
+
+<script>
+    // texts 定义 6×10 网格的 60 个分类标签。
+    const texts = [
+        "入坑作", "最喜欢", "看最多次", "最想安利", "最一眼缘", "最震撼",
+        "最治愈", "最搞笑", "最感动", "最热血", "最致郁", "最电波",
+        "最佳剧情", "最佳演出", "最佳音乐", "最佳世界观", "最佳角色塑造", "扭的最厉害",
+        "最佳恋爱", "最佳修罗场", "最佳后宫", "最佳百合", "最佳耽美", "最佳群像",
+        "最佳日常", "最佳校园", "最佳运动", "最佳战斗", "最佳智斗", "最佳悬疑",
+        "最佳奇幻", "最佳科幻", "最佳机甲", "最佳冒险", "最佳史诗", "最佳末日",
+        "最佳异世界", "最佳穿越", "最佳架空", "最佳转生", "最佳原创", "最佳改编",
+        "最佳时间轮回", "最佳叙诡", "最佳伪娘", "最佳超能力", "最佳职场", "最佳美食",
+        "小众最爱", "最爱画风", "最爱长篇", "最恐怖", "最写实", "常听说从未看",
+        "花最多钱", "最被低估", "最过誉", "最胃疼", "最期续作", "最讨厌"
+    ];
+
+    // cellImages 保存每个格子的封面 URL。
+    const cellImages = new Array(texts.length).fill(null);
+    // coverUrls 保存 /api/covers 返回的封面列表。
+    let coverUrls = [];
+    // activeCellIndex 记录当前正在编辑的格子索引。
+    let activeCellIndex = -1;
+    // _imgCache 缓存已加载图片，减少重复导出时的网络和解码开销。
+    const _imgCache = new Map();
+
+    // 搜索面板的题材标签分组，用于 Bangumi tag 浏览。
+    const allTags = [
+        { label: "情感体验", tags: ["治愈", "搞笑", "热血", "感动", "催泪", "致郁", "恐怖", "悬疑", "紧张"] },
+        { label: "恋爱人际", tags: ["恋爱", "青春", "百合", "BL", "后宫", "三角关系", "群像", "日常"] },
+        { label: "世界设定", tags: ["异世界", "穿越", "转生", "架空", "奇幻", "科幻", "赛博朋克", "末日", "史诗", "神话"] },
+        { label: "题材类型", tags: ["校园", "运动", "战斗", "冒险", "机甲", "超能力", "职场", "美食", "音乐", "偶像", "推理", "历史"] },
+        { label: "叙事风格", tags: ["剧情", "原创", "改编", "写实", "叙述性诡计", "时间循环", "智斗"] },
+        { label: "特色元素", tags: ["伪娘", "兽耳", "魔法", "女穿男装", "忍者", "武士", "吸血鬼", "僵尸"] },
+    ];
+
+    // 搜索状态
+    let currentTags = [];           // 当前选中的标签列表
+    let currentPage = 1;            // 当前页码
+    let currentTotal = 0;           // 搜索结果总数
+    let currentSubjectType = "all"; // 类型筛选
+    let currentOrder = "desc";      // 排序方向
+    const PAGE_SIZE = 20;           // 每页条数
+    let _searchTimer = null;        // 搜索防抖计时器
+    let _loadingRequests = 0;       // 正在进行的加载请求数量
+    let _searchVersion = 0;         // 搜索版本号，用于隔离旧请求结果
+    const _pageCache = new Map();   // 分页缓存 key -> data
+    const _inflight = new Map();    // 请求去重 key -> Promise
+    const CACHE_LIMIT = 120;        // 分页缓存上限，避免无限增长
+    const PREFETCH_STEPS = [1, 2, -1]; // 预加载顺序：后1页、后2页、前1页
+
+    // initGrid 创建 60 个网格格子并绑定点击事件。
+    function initGrid() {
+        const container = document.getElementById("gridContainer");
+        container.innerHTML = "";
+        texts.forEach((text, i) => {
+            const cell = document.createElement("div");
+            cell.className = "grid-cell";
+            cell.onclick = () => openCoverPicker(i);
+            cell.innerHTML = `
+                <div class="cell-img-area" id="imgArea${i}">
+                    <span class="placeholder">＋</span>
+                </div>
+                <div class="cell-label">${text}</div>
+            `;
+            container.appendChild(cell);
+        });
+    }
+
+    // loadCovers 从后端加载 covers 目录中的封面列表。
+    async function loadCovers() {
+        try {
+            const resp = await fetch("/api/covers");
+            if (!resp.ok) return;
+            const list = await resp.json();
+            coverUrls = list.map(n => ({ name: n, url: "covers/" + encodeURIComponent(n) }));
+        } catch (e) {
+            console.warn("加载封面失败:", e);
+        }
+    }
+
+    // openCoverPicker 打开弹窗并渲染可选封面。
+    function openCoverPicker(index) {
+        activeCellIndex = index;
+        const grid = document.getElementById("coverGrid");
+        document.getElementById("modalTitle").textContent = `为「${texts[index]}」选择封面`;
+
+        // 渲染已有封面列表
+        grid.innerHTML = "";
+        if (coverUrls.length === 0) {
+            grid.innerHTML = `<div class="no-covers-msg">covers 文件夹中没有找到图片<br>请将封面图片放入根目录下的 covers 文件夹<br>或切换到「搜索作品」Tab 在线搜索</div>`;
+        } else {
+            coverUrls.forEach(({ name, url }) => {
+                const item = document.createElement("div");
+                item.className = "cover-item";
+                item.innerHTML = `<img src="${url}" alt="${name}" title="${name}">`;
+                item.onclick = (e) => { e.stopPropagation(); selectCover(url, name); };
+                grid.appendChild(item);
+            });
+        }
+
+        // 重置搜索状态
+        currentTags = [];
+        currentPage = 1;
+        currentTotal = 0;
+        currentSubjectType = "all";
+        document.getElementById("searchInput").value = "";
+        document.getElementById("resultInfo").style.display = "none";
+        document.getElementById("pagination").innerHTML = "";
+        document.getElementById("searchResults").innerHTML =
+            '<div class="search-status">选择上方题材标签，或直接输入关键词搜索</div>';
+        document.querySelectorAll(".type-btn").forEach(b =>
+            b.classList.toggle("active", b.dataset.type === "all"));
+        _searchVersion += 1;
+        _pageCache.clear();
+        _inflight.clear();
+        syncTagBrowserUI();
+        renderTagBadges();
+
+        // 默认显示已有封面 Tab
+        switchTab("covers");
+        document.getElementById("coverModal").classList.add("active");
+    }
+
+    // selectCover 将选中封面写入当前格子并保存状态。
+    function selectCover(url, name) {
+        const i = activeCellIndex;
+        cellImages[i] = url;
+        document.getElementById(`imgArea${i}`).innerHTML = `<img src="${url}" alt="${name}">`;
+        closeModal();
+        saveState();
+    }
+
+    // clearCover 清除当前格子的封面并保存状态。
+    function clearCover() {
+        const i = activeCellIndex;
+        cellImages[i] = null;
+        document.getElementById(`imgArea${i}`).innerHTML = `<span class="placeholder">＋</span>`;
+        closeModal();
+        saveState();
+    }
+
+    // closeModal 关闭封面选择弹窗。
+    function closeModal() {
+        document.getElementById("coverModal").classList.remove("active");
+    }
+
+    // 点击弹窗遮罩层关闭
+    document.addEventListener("click", (e) => {
+        if (e.target === document.getElementById("coverModal")) closeModal();
+    });
+
+    // switchTab 切换弹窗内的 tab 面板。
+    function switchTab(tab) {
+        document.querySelectorAll(".modal-tab").forEach(t =>
+            t.classList.toggle("active", t.dataset.tab === tab));
+        document.getElementById("tabCovers").classList.toggle("active", tab === "covers");
+        document.getElementById("tabSearch").classList.toggle("active", tab === "search");
+        if (tab === "search") {
+            setTimeout(() => document.getElementById("searchInput").focus(), 100);
+        }
+    }
+
+    // ---- 搜索面板功能 ----
+
+    // initTagBrowser 按分类渲染标签选择按钮。
+    function initTagBrowser() {
+        const browser = document.getElementById("tagBrowser");
+        browser.innerHTML = "";
+        allTags.forEach(({ label, tags }) => {
+            const row = document.createElement("div");
+            row.className = "tag-cat-row";
+            row.innerHTML = `<span class="tag-cat-label">${label}</span>`;
+            const group = document.createElement("div");
+            group.className = "tag-cat-group";
+            tags.forEach(tag => {
+                const btn = document.createElement("button");
+                btn.className = "tag-pick-btn";
+                btn.textContent = tag;
+                btn.dataset.tag = tag;
+                btn.onclick = () => toggleTag(tag);
+                group.appendChild(btn);
+            });
+            row.appendChild(group);
+            browser.appendChild(row);
+        });
+    }
+
+    // syncTagBrowserUI 同步标签按钮的选中高亮。
+    function syncTagBrowserUI() {
+        document.querySelectorAll(".tag-pick-btn").forEach(btn =>
+            btn.classList.toggle("active", currentTags.includes(btn.dataset.tag)));
+    }
+
+    // renderTagBadges 渲染已选标签徽章。
+    function renderTagBadges() {
+        const container = document.getElementById("tagBadges");
+        container.innerHTML = "";
+        currentTags.forEach((tag, idx) => {
+            const badge = document.createElement("span");
+            badge.className = "tag-badge";
+            badge.innerHTML = `${tag} <span class="remove-tag" onclick="removeTag(${idx})">×</span>`;
+            container.appendChild(badge);
+        });
+    }
+
+    // toggleTag 切换标签选中状态，有条件时自动搜索。
+    function toggleTag(tag) {
+        const idx = currentTags.indexOf(tag);
+        if (idx === -1) currentTags.push(tag);
+        else currentTags.splice(idx, 1);
+        syncTagBrowserUI();
+        renderTagBadges();
+        if (hasSearchCondition()) doSearch();
+        else resetSearchResults();
+    }
+
+    // removeTag 移除指定位置的标签。
+    function removeTag(idx) {
+        currentTags.splice(idx, 1);
+        syncTagBrowserUI();
+        renderTagBadges();
+        if (hasSearchCondition()) doSearch();
+        else resetSearchResults();
+    }
+
+    // setSubjectType 切换作品类型筛选。
+    function setSubjectType(type) {
+        currentSubjectType = type;
+        document.querySelectorAll(".type-btn").forEach(b =>
+            b.classList.toggle("active", b.dataset.type === type));
+        if (hasSearchCondition()) doSearch();
+    }
+
+    // setOrder 切换排序方向。
+    function setOrder(order) {
+        currentOrder = order;
+        document.getElementById("orderDesc").classList.toggle("active", order === "desc");
+        document.getElementById("orderAsc").classList.toggle("active", order === "asc");
+        if (hasSearchCondition()) doSearch();
+    }
+
+    // onSortChange 排序字段变更时触发搜索。
+    function onSortChange() {
+        if (hasSearchCondition()) doSearch();
+    }
+
+    // hasSearchCondition 判断是否有有效搜索条件。
+    function hasSearchCondition() {
+        return currentTags.length > 0
+            || document.getElementById("searchInput").value.trim()
+            || currentSubjectType !== "all";
+    }
+
+    // resetSearchResults 清空搜索结果区。
+    function resetSearchResults() {
+        document.getElementById("searchResults").innerHTML =
+            '<div class="search-status">选择上方题材标签，或直接输入关键词搜索</div>';
+        document.getElementById("resultInfo").style.display = "none";
+        document.getElementById("pagination").innerHTML = "";
+    }
+
+    // doSearch 触发搜索（300ms 防抖）。
+    function doSearch() {
+        currentPage = 1;
+        _searchVersion += 1;
+        _pageCache.clear();
+        _inflight.clear();
+        clearTimeout(_searchTimer);
+        _searchTimer = setTimeout(() => loadAndRenderPage(currentPage, true), 300);
+    }
+
+    // currentSearchParams 读取当前搜索参数快照，避免请求过程被 UI 改动影响。
+    function currentSearchParams() {
+        return {
+            sort: document.getElementById("sortSelect").value,
+            keyword: document.getElementById("searchInput").value.trim(),
+            subjectType: currentSubjectType,
+            order: currentOrder,
+            tags: [...currentTags],
+        };
+    }
+
+    // pageCacheKey 生成分页缓存键，绑定搜索条件和页码。
+    function pageCacheKey(params, page) {
+        return JSON.stringify([
+            params.tags,
+            params.keyword,
+            params.subjectType,
+            params.order,
+            params.sort,
+            page,
+        ]);
+    }
+
+    // trimCache 如果缓存超限，删除最早写入的条目。
+    function trimCache() {
+        while (_pageCache.size > CACHE_LIMIT) {
+            const oldestKey = _pageCache.keys().next().value;
+            if (!oldestKey) break;
+            _pageCache.delete(oldestKey);
+        }
+    }
+
+    // fetchPageData 获取指定页数据：先读缓存，再复用飞行中请求，最后发新请求。
+    async function fetchPageData(page, params, version) {
+        const key = pageCacheKey(params, page);
+        if (_pageCache.has(key)) {
+            return _pageCache.get(key);
+        }
+        if (_inflight.has(key)) {
+            return _inflight.get(key);
+        }
+
+        const offset = (page - 1) * PAGE_SIZE;
+        const body = {
+            offset,
+            limit: PAGE_SIZE,
+            sort: params.sort,
+            order: params.order,
+            subjectType: params.subjectType,
+        };
+        if (params.tags.length > 0) body.tags = params.tags;
+        if (params.keyword) body.keyword = params.keyword;
+
+        const promise = (async () => {
+            const resp = await fetch("/api/browse", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            if (!data.error && version === _searchVersion) {
+                _pageCache.set(key, data);
+                trimCache();
+            }
+            return data;
+        })();
+
+        _inflight.set(key, promise);
+        promise.finally(() => _inflight.delete(key));
+        return promise;
+    }
+
+    // prefetchAround 后台预加载相邻页，复用 fetchPageData 去重逻辑。
+    function prefetchAround(page, totalPages, params, version) {
+        PREFETCH_STEPS.forEach(step => {
+            const nextPage = page + step;
+            if (nextPage < 1 || nextPage > totalPages || nextPage === page) {
+                return;
+            }
+            fetchPageData(nextPage, params, version).catch(() => {});
+        });
+    }
+
+    // loadAndRenderPage 加载并渲染指定页，支持缓存命中、请求去重和后台预加载。
+    async function loadAndRenderPage(page, showLoading) {
+        const version = _searchVersion;
+        const params = currentSearchParams();
+
+        const resultsDiv = document.getElementById("searchResults");
+        const btn = document.getElementById("searchBtn");
+        _loadingRequests += 1;
+        btn.disabled = true;
+        btn.textContent = "搜索中...";
+        if (showLoading) {
+            resultsDiv.innerHTML = '<div class="search-status"><div class="spinner"></div><br>正在加载作品...</div>';
+            document.getElementById("pagination").innerHTML = "";
+        }
+
+        try {
+            const data = await fetchPageData(page, params, version);
+            if (version !== _searchVersion) return;
+            if (page !== currentPage) return;
+
+            if (data.error) {
+                resultsDiv.innerHTML = `<div class="search-status">❌ ${data.error}</div>`;
+                return;
+            }
+            renderBrowseResults(data);
+            const totalPages = Math.max(1, Math.ceil((data.total || 0) / PAGE_SIZE));
+            prefetchAround(page, totalPages, params, version);
+        } catch (e) {
+            if (version !== _searchVersion) return;
+            if (page !== currentPage) return;
+            resultsDiv.innerHTML = `<div class="search-status">❌ 搜索出错: ${e.message}</div>`;
+        } finally {
+            _loadingRequests = Math.max(0, _loadingRequests - 1);
+            if (_loadingRequests === 0) {
+                btn.disabled = false;
+                btn.textContent = "搜索";
+            }
+        }
+    }
+
+    // renderBrowseResults 渲染搜索结果卡片和分页。
+    function renderBrowseResults(data) {
+        const resultsDiv = document.getElementById("searchResults");
+        currentTotal = data.total || 0;
+        const items = data.results || [];
+        const totalPages = Math.max(1, Math.ceil(currentTotal / PAGE_SIZE));
+
+        // 显示结果信息
+        const infoDiv = document.getElementById("resultInfo");
+        infoDiv.style.display = "flex";
+        document.getElementById("resultCount").textContent =
+            `共 ${currentTotal} 个结果 · 第 ${currentPage} / ${totalPages} 页`;
+
+        if (items.length === 0) {
+            resultsDiv.innerHTML = '<div class="search-status">没有找到相关作品</div>';
+            document.getElementById("pagination").innerHTML = "";
+            return;
+        }
+
+        // 渲染结果卡片
+        resultsDiv.innerHTML = "";
+        const grid = document.createElement("div");
+        grid.className = "search-results";
+        resultsDiv.appendChild(grid);
+
+        items.forEach(item => {
+            const el = document.createElement("div");
+            el.className = "search-item";
+            const displayName = item.name_cn || item.name;
+            const subName = item.name_cn ? item.name : "";
+            const coverSrc = item.cover || "";
+            const typeLabel = item.type_label || "";
+            const typeClass = typeLabel === "动画" ? "type-anime"
+                            : typeLabel === "游戏" ? "type-game"
+                            : typeLabel === "书籍" ? "type-book" : "";
+            const score = item.score ? `⭐${item.score}` : "";
+
+            el.innerHTML = `
+                ${coverSrc
+                    ? `<img class="search-item-img" src="${coverSrc}" alt="${displayName}" loading="lazy"
+                           onerror="this.style.display='none'">`
+                    : `<div class="search-item-img" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:24px;">无图</div>`
+                }
+                <div class="search-item-info">
+                    <div class="search-item-name" title="${displayName}">${displayName}</div>
+                    ${subName ? `<div class="search-item-sub" title="${subName}">${subName}</div>` : ""}
+                </div>
+                <div class="search-item-meta">
+                    ${typeLabel ? `<span class="search-item-type ${typeClass}">${typeLabel}</span>` : ""}
+                    ${score ? `<span class="search-item-score">${score}</span>` : ""}
+                </div>
+            `;
+            el.onclick = () => downloadAndApplyCover(item);
+            grid.appendChild(el);
+        });
+
+        renderPagination(totalPages);
+    }
+
+    // renderPagination 渲染分页按钮。
+    function renderPagination(totalPages) {
+        const pag = document.getElementById("pagination");
+        pag.innerHTML = "";
+        if (totalPages <= 1) return;
+
+        const addBtn = (label, page, disabled = false, active = false) => {
+            const b = document.createElement("button");
+            b.className = "page-btn" + (active ? " active" : "");
+            b.textContent = label;
+            b.disabled = disabled;
+            if (!disabled && !active) b.onclick = () => goToPage(page);
+            pag.appendChild(b);
+        };
+        const addEllipsis = () => {
+            const s = document.createElement("span");
+            s.className = "page-ellipsis";
+            s.textContent = "…";
+            pag.appendChild(s);
+        };
+
+        // 上一页
+        addBtn("‹", currentPage - 1, currentPage <= 1);
+        // 页码（当前页前后各显示 2 页，首尾超范围加省略号）
+        const WING = 2;
+        let lo = Math.max(1, currentPage - WING);
+        let hi = Math.min(totalPages, currentPage + WING);
+        if (lo > 1) { addBtn("1", 1); if (lo > 2) addEllipsis(); }
+        for (let p = lo; p <= hi; p++) addBtn(String(p), p, false, p === currentPage);
+        if (hi < totalPages) { if (hi < totalPages - 1) addEllipsis(); addBtn(String(totalPages), totalPages); }
+        // 下一页
+        addBtn("›", currentPage + 1, currentPage >= totalPages);
+    }
+
+    // goToPage 跳转到指定页。
+    function goToPage(page) {
+        currentPage = page;
+        const params = currentSearchParams();
+        const key = pageCacheKey(params, page);
+        const shouldShowLoading = !_pageCache.has(key) && !_inflight.has(key);
+        loadAndRenderPage(page, shouldShowLoading);
+        document.getElementById("searchResults").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // downloadAndApplyCover 下载搜索结果的封面并应用到当前格子。
+    async function downloadAndApplyCover(item) {
+        if (!item.cover) {
+            alert("该作品没有封面图片");
+            return;
+        }
+
+        // 显示下载遮罩
+        const overlay = document.createElement("div");
+        overlay.className = "download-overlay";
+        overlay.innerHTML = `<div class="download-overlay-box">
+            <div class="spinner"></div>
+            <div>正在下载封面...</div>
+        </div>`;
+        document.body.appendChild(overlay);
+
+        try {
+            const displayName = item.name_cn || item.name || "cover";
+            const safeName = displayName.replace(/[<>:"\/\\|?*\s]/g, "_").substring(0, 60);
+            const filename = `${safeName}_${item.id}`;
+
+            const resp = await fetch("/api/download-cover", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: item.cover, filename })
+            });
+            const data = await resp.json();
+
+            if (data.error) {
+                alert("下载失败: " + data.error);
+                return;
+            }
+
+            // 将下载的封面应用到当前格子
+            const coverPath = "covers/" + encodeURIComponent(data.filename);
+            selectCover(coverPath, data.filename);
+            await loadCovers();
+        } catch (e) {
+            alert("下载出错: " + e.message);
+        } finally {
+            overlay.remove();
+        }
+    }
+
+    // saveState 将格子数据保存到服务端 state.json。
+    async function saveState() {
+        try {
+            await fetch("/api/state", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cells: cellImages })
+            });
+        } catch (e) {
+            console.warn("保存状态失败:", e);
+        }
+    }
+
+    // loadState 从服务端读取并恢复已保存的格子状态。
+    async function loadState() {
+        try {
+            const resp = await fetch("/api/state");
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data.cells) return;
+            data.cells.forEach((url, i) => {
+                if (url && i < cellImages.length) {
+                    cellImages[i] = url;
+                    document.getElementById(`imgArea${i}`).innerHTML =
+                        `<img src="${url}" alt="cover">`;
+                }
+            });
+        } catch (e) {
+            console.warn("加载状态失败:", e);
+        }
+    }
+
+    // saveImage 将当前表格绘制到 canvas 并下载为 PNG。
+    async function saveImage() {
+        const cols = 6;
+        const rows = 10;
+        const boxW = 220;
+        const boxH = 310;
+        const border = 2;
+        const padding = 36;
+        const titleH = 70;
+        const labelH = 40;
+        const totalW = padding * 2 + cols * boxW + (cols + 1) * border;
+        const totalH = padding * 2 + titleH + rows * boxH + (rows + 1) * border;
+
+        const canvas = document.getElementById("exportCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = totalW;
+        canvas.height = totalH;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, totalW, totalH);
+
+        ctx.fillStyle = "#333";
+        ctx.font = "bold 36px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("ACGN生涯个人喜好表", totalW / 2, padding + titleH / 2);
+
+        const loadImg = (src) => new Promise((resolve) => {
+            if (!src) {
+                resolve(null);
+                return;
+            }
+            if (_imgCache.has(src)) {
+                resolve(_imgCache.get(src));
+                return;
+            }
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                _imgCache.set(src, img);
+                resolve(img);
+            };
+            img.onerror = () => resolve(null);
+            img.src = src;
+        });
+
+        const imgs = await Promise.all(cellImages.map(loadImg));
+        const gridLeft = padding;
+        const gridTop = padding + titleH;
+
+        for (let i = 0; i < texts.length; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const x = gridLeft + col * boxW + (col + 1) * border;
+            const y = gridTop + row * boxH + (row + 1) * border;
+
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(x, y, boxW, boxH);
+
+            if (imgs[i]) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y, boxW, boxH - labelH);
+                ctx.clip();
+                coverDraw(ctx, imgs[i], x, y, boxW, boxH - labelH);
+                ctx.restore();
+            }
+
+            const textY = y + boxH - labelH;
+            ctx.fillStyle = "#f0f0f0";
+            ctx.fillRect(x, textY, boxW, labelH);
+            ctx.strokeStyle = "#ccc";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, textY);
+            ctx.lineTo(x + boxW, textY);
+            ctx.stroke();
+
+            ctx.fillStyle = "#333";
+            ctx.font = "bold 18px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(texts[i], x + boxW / 2, textY + labelH / 2);
+        }
+
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = border;
+        const gridW = cols * boxW + (cols + 1) * border;
+        const gridH = rows * boxH + (rows + 1) * border;
+
+        for (let r = 0; r <= rows; r++) {
+            const lineY = gridTop + r * boxH + r * border + border / 2;
+            ctx.beginPath();
+            ctx.moveTo(gridLeft, lineY);
+            ctx.lineTo(gridLeft + gridW, lineY);
+            ctx.stroke();
+        }
+
+        for (let c = 0; c <= cols; c++) {
+            const lineX = gridLeft + c * boxW + c * border + border / 2;
+            ctx.beginPath();
+            ctx.moveTo(lineX, gridTop);
+            ctx.lineTo(lineX, gridTop + gridH);
+            ctx.stroke();
+        }
+
+        const link = document.createElement("a");
+        link.download = "ACGN生涯个人喜好表.png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    }
+
+    // coverDraw 使用 cover 方式绘制图片，行为等价于 CSS object-fit: cover。
+    function coverDraw(ctx, img, x, y, w, h) {
+        const imageRatio = img.width / img.height;
+        const boxRatio = w / h;
+        let sx;
+        let sy;
+        let sw;
+        let sh;
+
+        if (imageRatio > boxRatio) {
+            sh = img.height;
+            sw = sh * boxRatio;
+            sx = (img.width - sw) / 2;
+            sy = 0;
+        } else {
+            sw = img.width;
+            sh = sw / boxRatio;
+            sx = 0;
+            sy = (img.height - sh) / 2;
+        }
+
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+    }
+
+    // 启动流程：初始化网格、标签浏览器，再加载封面和状态。
+    initGrid();
+    initTagBrowser();
+    loadCovers();
+    loadState();
+</script>
+
+</body>
+</html>

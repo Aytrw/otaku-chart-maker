@@ -1,0 +1,36 @@
+# ── Binary & Build ──────────────────────────────
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+otaku-chart-maker
+dist/
+
+# ── Runtime Data ────────────────────────────────
+state.json
+config.json
+cache.db
+covers/*
+!covers/.gitkeep
+
+# ── Go ──────────────────────────────────────────
+go.sum
+vendor/
+
+# ── IDE & Editor ────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ──────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Misc ────────────────────────────────────────
+*.log
+out.txt
+err.txt
