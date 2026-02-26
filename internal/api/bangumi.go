@@ -79,7 +79,7 @@ func bookLabelFromPlatform(platform string) string {
 	case "漫画":
 		return "漫画"
 	case "小说":
-		return "轻小说"
+		return "小说"
 	default:
 		return "书籍"
 	}
@@ -98,7 +98,7 @@ type Client struct {
 	cache     map[string]cacheEntry
 }
 
-// cacheEntry 是缓存中的一条记录（原始 JSON + 过期时间）。
+// cacheEntry 是一条缓存记录，存储原始 JSON 及过期时间。
 type cacheEntry struct {
 	data   []byte
 	expire time.Time
@@ -189,6 +189,7 @@ type BrowseRequest struct {
 	Limit       int      `json:"limit"`
 	Sort        string   `json:"sort"`
 	SubjectType string   `json:"subjectType"`
+	ApiOffset   int      `json:"apiOffset"` // 书籍子类型游标：上一页返回的 next_api_offset
 }
 
 // BrowseResult 表示一条浏览结果。
@@ -203,10 +204,11 @@ type BrowseResult struct {
 
 // BrowseResponse 是浏览接口的响应。
 type BrowseResponse struct {
-	Results []BrowseResult `json:"results"`
-	Total   int            `json:"total"`
-	Offset  int            `json:"offset"`
-	Limit   int            `json:"limit"`
+	Results       []BrowseResult `json:"results"`
+	Total         int            `json:"total"`
+	Offset        int            `json:"offset"`
+	Limit         int            `json:"limit"`
+	NextApiOffset int            `json:"next_api_offset,omitempty"` // 书籍子类型游标：下一页应传入的 apiOffset
 }
 
 // Browse 通过 Bangumi v0 API 按标签/关键词浏览条目。
@@ -248,26 +250,21 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 	}
 	apiBody["filter"] = filter
 
-	// 请求 API（带缓存）
+	// 漫画和小说需要 platform 精确过滤，使用游标式分页
+	needsSubFilter := hasType && st.TypeID == 1 && st.MetaTag != ""
+	if needsSubFilter {
+		return c.browseBookSubType(req, apiBody, st.MetaTag)
+	}
+
+	// 请求 API，带缓存
 	apiURL := fmt.Sprintf("%s?limit=%d&offset=%d", bgmV0SearchURL, req.Limit, req.Offset)
 	rawJSON, err := c.cachedPost(apiURL, apiBody)
 	if err != nil {
 		return nil, err
 	}
 
-	// 解析 v0 API 响应格式（platform 字段区分漫画/小说等书籍子类型）
-	var raw struct {
-		Total int `json:"total"`
-		Data  []struct {
-			ID       int       `json:"id"`
-			Name     string    `json:"name"`
-			NameCN   string    `json:"name_cn"`
-			Images   bgmImages `json:"images"`
-			Type     int       `json:"type"`
-			Score    float64   `json:"score"`
-			Platform string    `json:"platform"`
-		} `json:"data"`
-	}
+	// 解析 v0 API 响应格式
+	var raw bgmSearchRaw
 	if err := json.Unmarshal(rawJSON, &raw); err != nil {
 		return nil, fmt.Errorf("解析浏览结果失败: %w", err)
 	}
@@ -277,10 +274,6 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 		label := TypeLabels[it.Type]
 		if it.Type == 1 {
 			label = bookLabelFromPlatform(it.Platform)
-		}
-		// 书籍子类型精确过滤：用 platform 字段排除不匹配的条目
-		if hasType && st.TypeID == 1 && st.MetaTag != "" && it.Platform != st.MetaTag {
-			continue
 		}
 		results = append(results, BrowseResult{
 			ID:        it.ID,
@@ -297,6 +290,96 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 		Total:   raw.Total,
 		Offset:  req.Offset,
 		Limit:   req.Limit,
+	}, nil
+}
+
+// bgmSearchRaw 是 Bangumi v0 搜索 API 的原始响应结构。
+type bgmSearchRaw struct {
+	Total int `json:"total"`
+	Data  []struct {
+		ID       int       `json:"id"`
+		Name     string    `json:"name"`
+		NameCN   string    `json:"name_cn"`
+		Images   bgmImages `json:"images"`
+		Type     int       `json:"type"`
+		Score    float64   `json:"score"`
+		Platform string    `json:"platform"`
+	} `json:"data"`
+}
+
+/*
+browseBookSubType 用游标式分页浏览漫画或小说，通过 platform 字段精确过滤，
+保证不丢失也不混入作品。
+
+从 apiOffset 开始向 Bangumi API 每批拉取最多 100 条，按 platform 过滤并
+收集满 limit 条后停止，返回 nextApiOffset 供下一页使用。
+*/
+func (c *Client) browseBookSubType(req BrowseRequest, apiBody map[string]any, metaTag string) (*BrowseResponse, error) {
+	apiOff := req.ApiOffset
+	results := make([]BrowseResult, 0, req.Limit)
+	var rawTotal, rawScanned, matched int
+
+	for len(results) < req.Limit {
+		apiURL := fmt.Sprintf("%s?limit=%d&offset=%d", bgmV0SearchURL, maxBrowseLimit, apiOff)
+		rawJSON, err := c.cachedPost(apiURL, apiBody)
+		if err != nil {
+			return nil, err
+		}
+
+		var raw bgmSearchRaw
+		if err := json.Unmarshal(rawJSON, &raw); err != nil {
+			return nil, fmt.Errorf("解析浏览结果失败: %w", err)
+		}
+
+		rawTotal = raw.Total
+		if len(raw.Data) == 0 {
+			break
+		}
+
+		filled := false
+		for i, it := range raw.Data {
+			rawScanned++
+			if it.Platform != metaTag {
+				continue
+			}
+			matched++
+			results = append(results, BrowseResult{
+				ID:        it.ID,
+				Name:      it.Name,
+				NameCN:    it.NameCN,
+				Cover:     it.Images.bestURL(),
+				TypeLabel: bookLabelFromPlatform(it.Platform),
+				Score:     it.Score,
+			})
+			if len(results) >= req.Limit {
+				apiOff += i + 1
+				filled = true
+				break
+			}
+		}
+
+		if !filled {
+			apiOff += len(raw.Data)
+			if len(raw.Data) < maxBrowseLimit {
+				break // API 数据已耗尽
+			}
+		}
+	}
+
+	// 用当前批次的匹配比例估算过滤后总数
+	total := rawTotal
+	if rawScanned > 0 && matched > 0 {
+		total = int(float64(rawTotal) * float64(matched) / float64(rawScanned))
+	} else if rawScanned > 0 && matched == 0 {
+		total = 0
+	}
+
+	return &BrowseResponse{
+		Results:       results,
+		Total:         total,
+		Offset:        req.Offset,
+		Limit:         req.Limit,
+		NextApiOffset: apiOff,
 	}, nil
 }
 
@@ -372,7 +455,7 @@ type bgmImages struct {
 	Medium string `json:"medium"`
 }
 
-// bestURL 按优先级选取封面 URL（common > large > medium），并强制 https。
+// bestURL 按 common、large、medium 优先级选取封面 URL，并强制 https。
 func (img bgmImages) bestURL() string {
 	cover := img.Common
 	if cover == "" {
@@ -408,7 +491,7 @@ func (c *Client) bgmGet(apiURL string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// bgmPost 向 Bangumi API 发送 POST 请求（接收已编码的 JSON 字节）。
+// bgmPost 向 Bangumi API 发送 POST 请求，接收已编码的 JSON 字节。
 func (c *Client) bgmPost(apiURL string, bodyJSON []byte) ([]byte, error) {
 	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(bodyJSON))
 	if err != nil {
@@ -432,7 +515,7 @@ func (c *Client) bgmPost(apiURL string, bodyJSON []byte) ([]byte, error) {
 
 // ---- 缓存 ----
 
-// cachedPost 带缓存的 POST 请求（命中则直接返回，未命中则请求后存入缓存）。
+// cachedPost 带缓存的 POST 请求，命中直接返回，未命中则请求后存入缓存。
 func (c *Client) cachedPost(apiURL string, body any) ([]byte, error) {
 	bodyJSON, err := json.Marshal(body)
 	if err != nil {
@@ -480,7 +563,7 @@ func (c *Client) startCacheCleaner() {
 	}
 }
 
-// pruneExpiredLocked 清理所有过期缓存条目（调用方需持锁）。
+// pruneExpiredLocked 清理所有过期缓存条目。调用方需持锁。
 func (c *Client) pruneExpiredLocked(now time.Time) {
 	for key, entry := range c.cache {
 		if !now.Before(entry.expire) {
@@ -489,7 +572,7 @@ func (c *Client) pruneExpiredLocked(now time.Time) {
 	}
 }
 
-// evictOverflowLocked 当缓存超过上限时按最早加入顺序淘汰（调用方需持锁）。
+// evictOverflowLocked 当缓存超过上限时按最早加入顺序淘汰。调用方需持锁。
 func (c *Client) evictOverflowLocked() {
 	for len(c.cache) > cacheMaxEntries {
 		var oldestKey string
@@ -537,7 +620,7 @@ func sanitizeFilename(imgURL, filename string) string {
 	return filename
 }
 
-// fixExtByContentType 根据 Content-Type 修正文件扩展名（png/webp）。
+// fixExtByContentType 根据 Content-Type 将文件扩展名修正为 png 或 webp。
 func fixExtByContentType(filename, contentType string) string {
 	base := strings.TrimSuffix(filename, filepath.Ext(filename))
 	if strings.Contains(contentType, "png") && !strings.HasSuffix(filename, ".png") {

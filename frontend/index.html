@@ -309,8 +309,8 @@
 
         .search-results {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-            gap: 8px;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 6px;
         }
         .search-item {
             cursor: pointer;
@@ -332,25 +332,26 @@
             background: #f5f5f5;
         }
         .search-item-info {
-            padding: 4px 6px 2px;
+            padding: 2px 4px 1px;
         }
         .search-item-name {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: bold;
             color: #333;
             line-height: 1.3;
             display: -webkit-box;
-            -webkit-line-clamp: 2;
+            -webkit-line-clamp: 1;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
         .search-item-sub {
-            font-size: 10px;
+            font-size: 9px;
             color: #999;
-            margin-top: 2px;
+            margin-top: 1px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            display: none;
         }
         .search-status {
             text-align: center;
@@ -438,8 +439,8 @@
         .search-item-meta {
             display: flex;
             align-items: center;
-            gap: 4px;
-            padding: 1px 6px 4px;
+            gap: 3px;
+            padding: 1px 4px 3px;
         }
         .search-item-type {
             font-size: 10px;
@@ -997,7 +998,7 @@
                 <div class="source-selector-row">
                     <div class="source-btn-wrap">
                         <button class="source-btn active" data-source="bgm" onclick="setSource('bgm')"
-                            title="Bangumi 番组计划 — 综合性 ACGN 信息站，收录动画、漫画、游戏、音乐、轻小说等条目，拥有丰富的标签和评分体系">📺 Bangumi</button>
+                            title="Bangumi 番组计划 — 综合性 ACGN 信息站，收录动画、漫画、游戏、音乐、小说等条目，拥有丰富的标签和评分体系">📺 Bangumi</button>
                         <span class="source-desc">动画 / 漫画 / 游戏 / 小说</span>
                     </div>
                     <div class="source-btn-wrap">
@@ -1017,7 +1018,7 @@
                         <button class="type-btn active" data-type="all" onclick="setSubjectType('all')">📦 全部</button>
                         <button class="type-btn" data-type="anime" onclick="setSubjectType('anime')">🎥 动画</button>
                         <button class="type-btn" data-type="manga" onclick="setSubjectType('manga')">📖 漫画</button>
-                        <button class="type-btn" data-type="novel" onclick="setSubjectType('novel')">📝 轻小说</button>
+                        <button class="type-btn" data-type="novel" onclick="setSubjectType('novel')">📝 小说</button>
                         <button class="type-btn" data-type="game" onclick="setSubjectType('game')">🎮 游戏</button>
                     </div>
                     <div class="section-label">排序方式</div>
@@ -1169,7 +1170,24 @@
     let currentPage = 1;            // 当前页码
     let currentTotal = 0;           // 搜索结果总数
     let currentSubjectType = "all"; // 类型筛选
-    const PAGE_SIZE = 20;           // 每页条数
+    let _cachedPageSize = 0;        // 缓存的每页条数
+    const SEARCH_ROWS = 2;           // 搜索结果显示行数
+    const MIN_ITEM_WIDTH = 100;      // 搜索卡片最小宽度
+    const SEARCH_GAP = 6;            // 搜索网格间距
+    // getSearchPageSize 根据弹窗宽度动态计算每页条目数（固定 2 行，无空位）。
+    function getSearchPageSize() {
+        if (_cachedPageSize > 0) return _cachedPageSize;
+        const modal = document.querySelector(".cover-modal-inner");
+        // modal padding 20px×2, tab-panel padding-right 6px
+        const availableWidth = modal && modal.clientWidth > 0
+            ? (modal.clientWidth - 46) : 880;
+        const cols = Math.max(1, Math.floor(
+            (availableWidth + SEARCH_GAP) / (MIN_ITEM_WIDTH + SEARCH_GAP)
+        ));
+        _cachedPageSize = cols * SEARCH_ROWS;
+        return _cachedPageSize;
+    }
+    function resetPageSizeCache() { _cachedPageSize = 0; }
     let _searchTimer = null;        // 搜索防抖计时器
     let _loadingRequests = 0;       // 正在进行的加载请求数量
     let _searchVersion = 0;         // 搜索版本号，用于隔离旧请求结果
@@ -1427,6 +1445,7 @@
 
         // 默认显示已有封面 Tab
         switchTab("covers");
+        resetPageSizeCache();
         document.getElementById("coverModal").classList.add("active");
     }
 
@@ -1770,6 +1789,7 @@
             params.subjectType,
             params.sort,
             page,
+            getSearchPageSize(),
         ]);
     }
 
@@ -1792,15 +1812,25 @@
             return _inflight.get(key);
         }
 
-        const offset = (page - 1) * PAGE_SIZE;
+        const pageSize = getSearchPageSize();
+        const offset = (page - 1) * pageSize;
         const body = {
             offset,
-            limit: PAGE_SIZE,
+            limit: pageSize,
             sort: params.sort,
             subjectType: params.subjectType,
         };
         if (params.tags.length > 0) body.tags = params.tags;
         if (params.keyword) body.keyword = params.keyword;
+
+        // 漫画/小说使用游标式分页：从上一页响应中取 next_api_offset
+        if (page > 1 && (params.subjectType === "manga" || params.subjectType === "novel")) {
+            const prevKey = pageCacheKey(params, page - 1);
+            const prevData = _pageCache.get(prevKey);
+            if (prevData && prevData.next_api_offset) {
+                body.apiOffset = prevData.next_api_offset;
+            }
+        }
 
         const promise = (async () => {
             const resp = await fetch("/api/browse", {
@@ -1822,7 +1852,22 @@
     }
 
     // prefetchAround 后台预加载相邻页，复用 fetchPageData 去重逻辑。
+    // 漫画/小说使用游标分页，必须串行预加载（下一页依赖上一页的响应）。
     function prefetchAround(page, totalPages, params, version) {
+        const isSubFiltered = params.subjectType === "manga" || params.subjectType === "novel";
+        if (isSubFiltered) {
+            // 只预加载下一页，且等当前页缓存就绪后串行执行
+            const nextPage = page + 1;
+            if (nextPage <= totalPages) {
+                const curKey = pageCacheKey(params, page);
+                // 当前页已缓存时直接预加载；否则等缓存写入后预加载
+                if (_pageCache.has(curKey)) {
+                    fetchPageData(nextPage, params, version).catch(() => {});
+                }
+                // 如果当前页还在飞行中，loadAndRenderPage 完成后会再调 prefetchAround
+            }
+            return;
+        }
         PREFETCH_STEPS.forEach(step => {
             const nextPage = page + step;
             if (nextPage < 1 || nextPage > totalPages || nextPage === page) {
@@ -1857,7 +1902,7 @@
                 return;
             }
             renderBrowseResults(data);
-            const totalPages = Math.max(1, Math.ceil((data.total || 0) / PAGE_SIZE));
+            const totalPages = Math.max(1, Math.ceil((data.total || 0) / getSearchPageSize()));
             prefetchAround(page, totalPages, params, version);
         } catch (e) {
             if (version !== _searchVersion) return;
@@ -1877,7 +1922,7 @@
         const resultsDiv = document.getElementById("searchResults");
         currentTotal = data.total || 0;
         const items = data.results || [];
-        const totalPages = Math.max(1, Math.ceil(currentTotal / PAGE_SIZE));
+        const totalPages = Math.max(1, Math.ceil(currentTotal / getSearchPageSize()));
 
         // 显示结果信息
         const infoDiv = document.getElementById("resultInfo");
@@ -1907,7 +1952,7 @@
             const typeClass = typeLabel === "动画" ? "type-anime"
                             : typeLabel === "游戏" ? "type-game"
                             : typeLabel === "漫画" ? "type-manga"
-                            : typeLabel === "轻小说" ? "type-novel" : "";
+                            : typeLabel === "小说" ? "type-novel" : "";
             const score = item.score ? `⭐${item.score}` : "";
 
             el.innerHTML = `
@@ -1968,11 +2013,32 @@
     }
 
     // goToPage 跳转到指定页。
-    function goToPage(page) {
+    // 漫画/小说使用游标分页，跳页时需要按顺序拉取中间页以构建游标链。
+    async function goToPage(page) {
         currentPage = page;
         const params = currentSearchParams();
         const key = pageCacheKey(params, page);
         const shouldShowLoading = !_pageCache.has(key) && !_inflight.has(key);
+
+        // 漫画/小说：确保前序页的游标链完整
+        if (page > 1 && (params.subjectType === "manga" || params.subjectType === "novel")) {
+            const prevKey = pageCacheKey(params, page - 1);
+            if (!_pageCache.has(prevKey) && !_inflight.has(prevKey)) {
+                const ver = _searchVersion;
+                if (shouldShowLoading) {
+                    document.getElementById("searchResults").innerHTML =
+                        '<div class="search-status"><div class="spinner"></div><br>正在加载作品...</div>';
+                }
+                for (let p = 1; p < page; p++) {
+                    const pk = pageCacheKey(params, p);
+                    if (!_pageCache.has(pk)) {
+                        await fetchPageData(p, params, ver);
+                    }
+                    if (ver !== _searchVersion) return; // 搜索条件已变，放弃
+                }
+            }
+        }
+
         loadAndRenderPage(page, shouldShowLoading);
         document.getElementById("searchResults").scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -2038,7 +2104,7 @@
 
     // vndbPageCacheKey 生成 VNDB 分页缓存键。
     function vndbPageCacheKey(keyword, page) {
-        return JSON.stringify(["vndb", keyword, page]);
+        return JSON.stringify(["vndb", keyword, page, getSearchPageSize()]);
     }
 
     // fetchVNDBPageData 获取 VNDB 指定页数据，带缓存和去重。
@@ -2051,7 +2117,7 @@
             const resp = await fetch("/api/vndb/search", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ keyword, page })
+                body: JSON.stringify({ keyword, page, limit: getSearchPageSize() })
             });
             const data = await resp.json();
             if (!data.error && version === _vndbSearchVersion) {
@@ -2103,7 +2169,7 @@
                 return;
             }
             renderVNDBResults(data);
-            const totalPages = Math.max(1, Math.ceil((data.total || 0) / PAGE_SIZE));
+            const totalPages = Math.max(1, Math.ceil((data.total || 0) / getSearchPageSize()));
             prefetchVNDBAround(page, totalPages, keyword, version);
         } catch (e) {
             if (version !== _vndbSearchVersion) return;
@@ -2123,7 +2189,7 @@
         const resultsDiv = document.getElementById("searchResults");
         vndbTotal = data.total || 0;
         const items = data.results || [];
-        const totalPages = Math.max(1, Math.ceil(vndbTotal / PAGE_SIZE));
+        const totalPages = Math.max(1, Math.ceil(vndbTotal / getSearchPageSize()));
 
         const infoDiv = document.getElementById("resultInfo");
         infoDiv.style.display = "flex";

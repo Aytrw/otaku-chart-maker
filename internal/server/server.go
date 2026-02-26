@@ -297,6 +297,7 @@ func (h *handler) handleVNDBSearch(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Keyword string `json:"keyword"`
 		Page    int    `json:"page"`
+		Limit   int    `json:"limit"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "解析请求失败"})
@@ -305,8 +306,11 @@ func (h *handler) handleVNDBSearch(w http.ResponseWriter, r *http.Request) {
 	if req.Page <= 0 {
 		req.Page = 1
 	}
+	if req.Limit <= 0 || req.Limit > 100 {
+		req.Limit = 20
+	}
 
-	resp, err := h.vndb.SearchVN(req.Keyword, req.Page, 20)
+	resp, err := h.vndb.SearchVN(req.Keyword, req.Page, req.Limit)
 	if err != nil {
 		h.writeAPIError(w, err)
 		return
