@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -19,19 +18,17 @@ import (
 const port = 8000
 
 // frontendFS 在发布模式下提供嵌入的前端文件。
+//
 //go:embed frontend/*
 var frontendFS embed.FS
 
 // main 完成运行目录初始化、HTTP 服务启动和浏览器拉起。
 func main() {
-	// -dev 模式直接读取磁盘文件，便于前端热更新式调试。
-	devMode := flag.Bool("dev", false, "开发模式：从 frontend/ 目录实时读取前端文件")
-	flag.Parse()
+	// 确定数据目录：exe 目录下有 covers/ 就用 exe 目录，否则回退 cwd（兼容 go run）。
+	baseDir := resolveBaseDir()
 
-	// 确定数据目录：dev 用 cwd，release 用 exe 目录，无 covers/ 时回退 cwd（兼容 go run）。
-	baseDir := resolveBaseDir(*devMode)
-
-	frontend, err := loadFrontendFS(*devMode, baseDir)
+	// 如果 baseDir 下有 frontend/index.html，直接从磁盘读取，方便实时修改前端。
+	frontend, devMode, err := loadFrontendFS(baseDir)
 	if err != nil {
 		log.Fatalf("加载前端文件失败: %v", err)
 	}
@@ -42,9 +39,9 @@ func main() {
 	}
 
 	url := fmt.Sprintf("http://localhost:%d", port)
-	modeLabel := "Release"
-	if *devMode {
-		modeLabel = "Development"
+	modeLabel := "Release (embedded)"
+	if devMode {
+		modeLabel = "Development (disk)"
 	}
 	printStartupBanner(modeLabel, url, coverCount)
 
@@ -56,15 +53,11 @@ func main() {
 	}
 }
 
-// resolveBaseDir 确定数据根目录（dev→cwd，release→exe 目录，无 covers/ 时回退 cwd）。
-func resolveBaseDir(devMode bool) string {
+// resolveBaseDir 确定数据根目录：exe 目录下有 covers/ 就用 exe 目录，否则回退 cwd（兼容 go run）。
+func resolveBaseDir() string {
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("获取当前工作目录失败: %v", err)
-	}
-
-	if devMode {
-		return cwd
 	}
 
 	execPath, err := os.Executable()
@@ -74,7 +67,6 @@ func resolveBaseDir(devMode bool) string {
 	}
 
 	execDir := filepath.Dir(execPath)
-	// 检查可执行文件目录下是否有 covers/，没有则说明是 go run 的临时目录
 	if info, statErr := os.Stat(filepath.Join(execDir, "covers")); statErr == nil && info.IsDir() {
 		return execDir
 	}
@@ -97,22 +89,19 @@ func openBrowser(url string) {
 	_ = cmd.Start()
 }
 
-// loadFrontendFS 按运行模式返回前端文件系统。
-func loadFrontendFS(devMode bool, baseDir string) (fs.FS, error) {
-	if devMode {
-		frontendDir := filepath.Join(baseDir, "frontend")
-		diskFS := os.DirFS(frontendDir)
-		if _, err := fs.Stat(diskFS, "index.html"); err != nil {
-			return nil, fmt.Errorf("开发模式找不到 frontend/index.html: %w", err)
-		}
-		return diskFS, nil
+// loadFrontendFS 自动检测磁盘上的 frontend/ 目录，有则从磁盘读取（方便开发），否则用 embed。
+func loadFrontendFS(baseDir string) (fs.FS, bool, error) {
+	frontendDir := filepath.Join(baseDir, "frontend")
+	diskFS := os.DirFS(frontendDir)
+	if _, err := fs.Stat(diskFS, "index.html"); err == nil {
+		return diskFS, true, nil
 	}
 
 	embeddedFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return embeddedFS, nil
+	return embeddedFS, false, nil
 }
 
 // printStartupBanner 输出统一启动信息。
