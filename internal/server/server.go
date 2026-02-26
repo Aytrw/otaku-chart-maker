@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Aytrw/otaku-chart-maker/internal/api"
 )
@@ -37,6 +38,7 @@ type handler struct {
 	stateFile string
 	bgm       *api.Client
 	mux       *http.ServeMux
+	stateMu   sync.RWMutex
 }
 
 // NewHandler 初始化目录、状态文件和路由，并返回封面数量用于启动信息。
@@ -142,7 +144,9 @@ func (h *handler) handleCovers(w http.ResponseWriter, r *http.Request) {
 
 // loadState 读取 state.json，文件缺失或空内容时返回空对象。
 func (h *handler) loadState(w http.ResponseWriter) {
+	h.stateMu.RLock()
 	b, err := os.ReadFile(h.stateFile)
+	h.stateMu.RUnlock()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			h.writeJSON(w, http.StatusOK, map[string]any{})
@@ -188,8 +192,12 @@ func (h *handler) saveState(w http.ResponseWriter, r *http.Request) {
 	}
 	formatted = append(formatted, '\n')
 
-	if err := os.WriteFile(h.stateFile, formatted, 0o644); err != nil {
-		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	h.stateMu.Lock()
+	writeErr := os.WriteFile(h.stateFile, formatted, 0o644)
+	h.stateMu.Unlock()
+
+	if writeErr != nil {
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": writeErr.Error()})
 		return
 	}
 

@@ -106,9 +106,9 @@ func printStartupBanner(modeLabel, url string, coverCount int) {
 	fmt.Println("╔══════════════════════════════════════════╗")
 	fmt.Println("║  Otaku Chart Maker - Local Server        ║")
 	fmt.Println("╠══════════════════════════════════════════╣")
-	fmt.Printf("║  Mode: %-33s║\n", modeLabel)
-	fmt.Printf("║  URL:  %-33s║\n", url)
-	fmt.Printf("║  Covers: covers/ (%d images)%-13s║\n", coverCount, "")
+	fmt.Printf("║  %-40s║\n", "Mode: "+modeLabel)
+	fmt.Printf("║  %-40s║\n", "URL:  "+url)
+	fmt.Printf("║  %-40s║\n", fmt.Sprintf("Covers: covers/ (%d images)", coverCount))
 	fmt.Println("║  Press Ctrl+C to stop                    ║")
 	fmt.Println("╚══════════════════════════════════════════╝")
 }
