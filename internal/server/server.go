@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Aytrw/otaku-chart-maker/internal/api"
 )
@@ -89,6 +91,7 @@ func (h *handler) routes() {
 	h.mux.HandleFunc("/api/search", h.handleSearch)
 	h.mux.HandleFunc("/api/browse", h.handleBrowse)
 	h.mux.HandleFunc("/api/download-cover", h.handleDownloadCover)
+	h.mux.HandleFunc("/api/upload-cover", h.handleUploadCover)
 }
 
 // handleIndex 返回前端首页内容。
@@ -309,6 +312,72 @@ func (h *handler) handleDownloadCover(w http.ResponseWriter, r *http.Request) {
 		"path":     result.Path,
 		"size":     result.Size,
 	})
+}
+
+// handleUploadCover 接收前端上传的图片文件并保存到 covers 目录。
+func (h *handler) handleUploadCover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	const maxUpload = 20 << 20 // 20MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "文件过大或解析失败"})
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少文件"})
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if _, ok := imageExts[ext]; !ok {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "不支持的图片格式"})
+		return
+	}
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "读取文件失败"})
+		return
+	}
+
+	filename := header.Filename
+	_ = os.MkdirAll(h.coversDir, 0o755)
+	filename = uniqueFilename(h.coversDir, filename)
+	savePath := filepath.Join(h.coversDir, filename)
+	if err := os.WriteFile(savePath, data, 0o644); err != nil {
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存文件失败"})
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"filename": filename,
+		"path":     "covers/" + filename,
+		"size":     len(data),
+	})
+}
+
+// uniqueFilename 如果同名文件已存在，加数字后缀避免覆盖。
+func uniqueFilename(dir, filename string) string {
+	if _, err := os.Stat(filepath.Join(dir, filename)); os.IsNotExist(err) {
+		return filename
+	}
+	ext := filepath.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
+	for n := 1; n <= 9999; n++ {
+		candidate := fmt.Sprintf("%s_%d%s", base, n, ext)
+		if _, err := os.Stat(filepath.Join(dir, candidate)); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+	return fmt.Sprintf("%s_%d%s", base, time.Now().UnixNano(), ext)
 }
 
 // readJSON 从请求体解析 JSON 到目标结构。

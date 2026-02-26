@@ -195,6 +195,31 @@
             grid-column: 1 / -1;
         }
 
+        /* 封面工具栏 */
+        .cover-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .cover-tool-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 14px;
+            border: 1.5px solid #ddd;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .cover-tool-btn:hover { border-color: #ea4c89; color: #ea4c89; }
+        .cover-tool-btn:active { background: #fce4ec; }
+        .cover-tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
         /* Tab 切换 */
         .modal-tabs {
             display: flex;
@@ -836,9 +861,11 @@
 
             <!-- 已有封面 -->
             <div class="tab-panel active" id="tabCovers">
-                <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-                    <button class="ctrl-btn" style="padding:5px 14px;font-size:13px;" onclick="refreshCovers()" title="刷新封面列表">🔄 刷新封面</button>
+                <div class="cover-toolbar">
+                    <button class="cover-tool-btn" onclick="triggerUploadCover()" title="从本地导入图片到 covers 目录">📂 导入封面</button>
+                    <button class="cover-tool-btn" onclick="refreshCovers()" title="刷新 covers 目录（拖入新文件后点击）">🔄 刷新</button>
                 </div>
+                <input type="file" id="uploadCoverInput" accept="image/*" multiple style="display:none" onchange="handleUploadFiles(this.files)">
                 <div class="cover-grid" id="coverGrid"></div>
             </div>
 
@@ -1128,20 +1155,71 @@
         }
     }
 
-    // refreshCovers 手动刷新封面列表并重新渲染网格。
+    // refreshCovers 手动刷新封面列表并重新渲染弹窗内网格。
     async function refreshCovers() {
         await loadCovers();
-        // 如果弹窗打开中，重新渲染已有封面网格
+        renderCoverGrid();
+    }
+
+    // renderCoverGrid 渲染弹窗内的已有封面网格。
+    function renderCoverGrid() {
         const grid = document.getElementById("coverGrid");
-        if (grid) {
-            grid.innerHTML = "";
-            coverUrls.forEach(c => {
-                const img = document.createElement("img");
-                img.src = c.url;
-                img.title = c.name;
-                img.onclick = () => selectCover(c.url);
-                grid.appendChild(img);
-            });
+        if (!grid) return;
+        grid.innerHTML = "";
+        if (coverUrls.length === 0) {
+            grid.innerHTML = `<div class="no-covers-msg">covers 文件夹中没有找到图片<br>点击「导入封面」上传本地图片，或切换到「搜索作品」Tab 在线搜索</div>`;
+            return;
+        }
+        coverUrls.forEach(({ name, url }) => {
+            const item = document.createElement("div");
+            item.className = "cover-item";
+            item.innerHTML = `<img src="${url}" alt="${name}" title="${name}">`;
+            item.onclick = (e) => { e.stopPropagation(); selectCover(url, name); };
+            grid.appendChild(item);
+        });
+    }
+
+    // triggerUploadCover 触发文件选择对话框。
+    function triggerUploadCover() {
+        document.getElementById("uploadCoverInput").click();
+    }
+
+    // handleUploadFiles 上传选中的图片文件到后端 covers 目录。
+    async function handleUploadFiles(files) {
+        if (!files || files.length === 0) return;
+        const overlay = document.createElement("div");
+        overlay.className = "download-overlay";
+        overlay.innerHTML = `<div class="download-overlay-box">
+            <div class="spinner"></div>
+            <div>正在导入封面（0/${files.length}）...</div>
+        </div>`;
+        document.body.appendChild(overlay);
+        const msgEl = overlay.querySelector("div > div:last-child");
+
+        let lastFilename = null;
+        try {
+            for (let i = 0; i < files.length; i++) {
+                msgEl.textContent = `正在导入封面（${i + 1}/${files.length}）...`;
+                const form = new FormData();
+                form.append("file", files[i]);
+                const resp = await fetch("/api/upload-cover", { method: "POST", body: form });
+                const data = await resp.json();
+                if (data.error) {
+                    alert(`导入 ${files[i].name} 失败: ${data.error}`);
+                    continue;
+                }
+                lastFilename = data.filename;
+            }
+            await loadCovers();
+            renderCoverGrid();
+            if (lastFilename && activeCellIndex >= 0) {
+                // 不自动选择，仅刷新列表
+            }
+        } catch (e) {
+            alert("导入出错: " + e.message);
+        } finally {
+            overlay.remove();
+            document.getElementById("uploadCoverInput").value = "";
         }
     }
 
@@ -1152,18 +1230,7 @@
         document.getElementById("modalTitle").textContent = `为「${texts[index]}」选择封面`;
 
         // 渲染已有封面列表
-        grid.innerHTML = "";
-        if (coverUrls.length === 0) {
-            grid.innerHTML = `<div class="no-covers-msg">covers 文件夹中没有找到图片<br>请将封面图片放入根目录下的 covers 文件夹<br>或切换到「搜索作品」Tab 在线搜索</div>`;
-        } else {
-            coverUrls.forEach(({ name, url }) => {
-                const item = document.createElement("div");
-                item.className = "cover-item";
-                item.innerHTML = `<img src="${url}" alt="${name}" title="${name}">`;
-                item.onclick = (e) => { e.stopPropagation(); selectCover(url, name); };
-                grid.appendChild(item);
-            });
-        }
+        renderCoverGrid();
 
         // 重置搜索状态
         currentTags = [];
