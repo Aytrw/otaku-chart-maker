@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -432,6 +432,15 @@
             color: #ff9800;
             font-weight: bold;
         }
+        /* 来源徽章 */
+        .source-badge {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .source-badge.source-bgm  { background: #e8f0fe; color: #3b6ece; }
+        .source-badge.source-vndb { background: #f3e5f5; color: #7b1fa2; }
         .load-more-wrapper {
             text-align: center;
             padding: 16px 0;
@@ -474,6 +483,30 @@
         }
         .type-btn:hover { border-color: #ea4c89; color: #ea4c89; }
         .type-btn.active {
+            background: #ea4c89;
+            border-color: #ea4c89;
+            color: #fff;
+        }
+
+        /* 数据源选择 */
+        .source-selector-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .source-btn {
+            padding: 5px 18px;
+            border: 2px solid #ddd;
+            border-radius: 16px;
+            background: #fff;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.15s;
+        }
+        .source-btn:hover { border-color: #ea4c89; color: #ea4c89; }
+        .source-btn.active {
             background: #ea4c89;
             border-color: #ea4c89;
             color: #fff;
@@ -871,10 +904,17 @@
 
             <!-- 搜索作品 -->
             <div class="tab-panel" id="tabSearch">
-                <!-- 标签浏览器 -->
-                <div class="tag-browser" id="tagBrowser"></div>
-                <!-- 已选标签 -->
-                <div class="tag-badges" id="tagBadges"></div>
+                <!-- 数据源选择 -->
+                <div class="source-selector-row">
+                    <button class="source-btn active" data-source="bgm" onclick="setSource('bgm')">📺 Bangumi</button>
+                    <button class="source-btn" data-source="vndb" onclick="setSource('vndb')">🎮 VNDB</button>
+                </div>
+                <!-- Bangumi 专属控件（VNDB 模式下隐藏） -->
+                <div id="bgmControls">
+                    <!-- 标签浏览器 -->
+                    <div class="tag-browser" id="tagBrowser"></div>
+                    <!-- 已选标签 -->
+                    <div class="tag-badges" id="tagBadges"></div>
                 <!-- 类型筛选 -->
                 <div class="type-filter-row" id="typeFilterRow">
                     <button class="type-btn active" data-type="all" onclick="setSubjectType('all')">📦 全部</button>
@@ -893,6 +933,7 @@
                         <option value="match">按匹配度</option>
                     </select>
                 </div>
+                </div><!-- /bgmControls -->
                 <!-- 关键词搜索 -->
                 <div class="search-bar">
                     <input type="text" id="searchInput" placeholder="输入关键词进一步筛选（可选）..." onkeydown="if(event.key==='Enter') doSearch()">
@@ -1025,6 +1066,19 @@
     const _inflight = new Map();    // 请求去重 key -> Promise
     const CACHE_LIMIT = 120;        // 分页缓存上限，避免无限增长
     const PREFETCH_STEPS = [1, 2, -1]; // 预加载顺序：后1页、后2页、前1页
+
+    // 数据源选择："bgm" 或 "vndb"
+    let currentSource = "bgm";
+
+    // VNDB 搜索状态（独立于 Bangumi）
+    let vndbPage = 1;
+    let vndbTotal = 0;
+    let _vndbSearchTimer = null;
+    let _vndbLoadingRequests = 0;
+    let _vndbSearchVersion = 0;
+    const _vndbPageCache = new Map();
+    const _vndbInflight = new Map();
+    const VNDB_PREFETCH_STEPS = [1]; // VNDB 仅预加载后 1 页
 
     // initGrid 创建 60 个网格格子并绑定点击事件。
     function initGrid() {
@@ -1167,7 +1221,7 @@
         if (!grid) return;
         grid.innerHTML = "";
         if (coverUrls.length === 0) {
-            grid.innerHTML = `<div class="no-covers-msg">covers 文件夹中没有找到图片<br>点击「导入封面」上传本地图片，或切换到「搜索作品」Tab 在线搜索</div>`;
+            grid.innerHTML = `<div class="no-covers-msg">covers 文件夹中没有找到图片<br>点击「导入封面」上传本地图片，或切换到 Bangumi / VNDB Tab 在线搜索</div>`;
             return;
         }
         coverUrls.forEach(({ name, url }) => {
@@ -1249,6 +1303,16 @@
         _inflight.clear();
         syncTagBrowserUI();
         renderTagBadges();
+
+        // 重置 VNDB 搜索状态
+        vndbPage = 1;
+        vndbTotal = 0;
+        _vndbSearchVersion += 1;
+        _vndbPageCache.clear();
+        _vndbInflight.clear();
+
+        // 重置数据源为 Bangumi
+        setSource("bgm");
 
         // 默认显示已有封面 Tab
         switchTab("covers");
@@ -1438,6 +1502,20 @@
         }
     }
 
+    // setSource 切换搜索数据源，显示/隐藏对应控件。
+    function setSource(src) {
+        currentSource = src;
+        document.querySelectorAll(".source-btn").forEach(b =>
+            b.classList.toggle("active", b.dataset.source === src));
+        document.getElementById("bgmControls").style.display = src === "bgm" ? "" : "none";
+        const input = document.getElementById("searchInput");
+        input.placeholder = src === "vndb"
+            ? "输入 Galgame 名称搜索..."
+            : "输入关键词进一步筛选（可选）...";
+        // 切换数据源时清空结果
+        resetSearchResults();
+    }
+
     // ---- 搜索面板功能 ----
 
     // initTagBrowser 按分类渲染标签选择按钮。
@@ -1516,6 +1594,9 @@
 
     // hasSearchCondition 判断是否有有效搜索条件。
     function hasSearchCondition() {
+        if (currentSource === "vndb") {
+            return !!document.getElementById("searchInput").value.trim();
+        }
         return currentTags.length > 0
             || document.getElementById("searchInput").value.trim()
             || currentSubjectType !== "all";
@@ -1523,14 +1604,21 @@
 
     // resetSearchResults 清空搜索结果区。
     function resetSearchResults() {
+        const hint = currentSource === "vndb"
+            ? "输入 Galgame 名称进行搜索"
+            : "选择上方题材标签，或直接输入关键词搜索";
         document.getElementById("searchResults").innerHTML =
-            '<div class="search-status">选择上方题材标签，或直接输入关键词搜索</div>';
+            `<div class="search-status">${hint}</div>`;
         document.getElementById("resultInfo").style.display = "none";
         document.getElementById("pagination").innerHTML = "";
     }
 
-    // doSearch 触发搜索（300ms 防抖）。
+    // doSearch 触发搜索（300ms 防抖），根据当前数据源分发。
     function doSearch() {
+        if (currentSource === "vndb") {
+            doVNDBSearch();
+            return;
+        }
         currentPage = 1;
         _searchVersion += 1;
         _pageCache.clear();
@@ -1707,11 +1795,12 @@
                     ${subName ? `<div class="search-item-sub" title="${subName}">${subName}</div>` : ""}
                 </div>
                 <div class="search-item-meta">
+                    <span class="source-badge source-bgm">BGM</span>
                     ${typeLabel ? `<span class="search-item-type ${typeClass}">${typeLabel}</span>` : ""}
                     ${score ? `<span class="search-item-score">${score}</span>` : ""}
                 </div>
             `;
-            el.onclick = () => downloadAndApplyCover(item);
+            el.onclick = () => downloadAndApplyCover(item, "bgm");
             grid.appendChild(el);
         });
 
@@ -1763,7 +1852,8 @@
     }
 
     // downloadAndApplyCover 下载搜索结果的封面并应用到当前格子。
-    async function downloadAndApplyCover(item) {
+    // source: "bgm" 或 "vndb"，决定后端使用哪个客户端下载。
+    async function downloadAndApplyCover(item, source) {
         if (!item.cover) {
             alert("该作品没有封面图片");
             return;
@@ -1786,7 +1876,7 @@
             const resp = await fetch("/api/download-cover", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: item.cover, filename })
+                body: JSON.stringify({ url: item.cover, filename, source: source || "bgm" })
             });
             const data = await resp.json();
 
@@ -1804,6 +1894,196 @@
         } finally {
             overlay.remove();
         }
+    }
+
+    // ---- VNDB 搜索功能 ----
+
+    // doVNDBSearch 触发 VNDB 搜索（300ms 防抖）。
+    function doVNDBSearch() {
+        const keyword = document.getElementById("searchInput").value.trim();
+        if (!keyword) return;
+        vndbPage = 1;
+        _vndbSearchVersion += 1;
+        _vndbPageCache.clear();
+        _vndbInflight.clear();
+        clearTimeout(_vndbSearchTimer);
+        _vndbSearchTimer = setTimeout(() => loadAndRenderVNDBPage(vndbPage, true), 300);
+    }
+
+    // vndbPageCacheKey 生成 VNDB 分页缓存键。
+    function vndbPageCacheKey(keyword, page) {
+        return JSON.stringify(["vndb", keyword, page]);
+    }
+
+    // fetchVNDBPageData 获取 VNDB 指定页数据，带缓存和去重。
+    async function fetchVNDBPageData(page, keyword, version) {
+        const key = vndbPageCacheKey(keyword, page);
+        if (_vndbPageCache.has(key)) return _vndbPageCache.get(key);
+        if (_vndbInflight.has(key)) return _vndbInflight.get(key);
+
+        const promise = (async () => {
+            const resp = await fetch("/api/vndb/search", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ keyword, page })
+            });
+            const data = await resp.json();
+            if (!data.error && version === _vndbSearchVersion) {
+                _vndbPageCache.set(key, data);
+                while (_vndbPageCache.size > CACHE_LIMIT) {
+                    _vndbPageCache.delete(_vndbPageCache.keys().next().value);
+                }
+            }
+            return data;
+        })();
+
+        _vndbInflight.set(key, promise);
+        promise.finally(() => _vndbInflight.delete(key));
+        return promise;
+    }
+
+    // prefetchVNDBAround 后台预加载 VNDB 相邻页。
+    function prefetchVNDBAround(page, totalPages, keyword, version) {
+        VNDB_PREFETCH_STEPS.forEach(step => {
+            const p = page + step;
+            if (p >= 1 && p <= totalPages && p !== page)
+                fetchVNDBPageData(p, keyword, version).catch(() => {});
+        });
+    }
+
+    // loadAndRenderVNDBPage 加载并渲染 VNDB 指定页（使用共享结果区域）。
+    async function loadAndRenderVNDBPage(page, showLoading) {
+        const version = _vndbSearchVersion;
+        const keyword = document.getElementById("searchInput").value.trim();
+        if (!keyword) return;
+
+        const resultsDiv = document.getElementById("searchResults");
+        const btn = document.getElementById("searchBtn");
+        _vndbLoadingRequests += 1;
+        btn.disabled = true;
+        btn.textContent = "搜索中...";
+        if (showLoading) {
+            resultsDiv.innerHTML = '<div class="search-status"><div class="spinner"></div><br>正在搜索 VNDB...</div>';
+            document.getElementById("pagination").innerHTML = "";
+        }
+
+        try {
+            const data = await fetchVNDBPageData(page, keyword, version);
+            if (version !== _vndbSearchVersion) return;
+            if (page !== vndbPage) return;
+
+            if (data.error) {
+                resultsDiv.innerHTML = `<div class="search-status">❌ ${data.error}</div>`;
+                return;
+            }
+            renderVNDBResults(data);
+            const totalPages = Math.max(1, Math.ceil((data.total || 0) / PAGE_SIZE));
+            prefetchVNDBAround(page, totalPages, keyword, version);
+        } catch (e) {
+            if (version !== _vndbSearchVersion) return;
+            if (page !== vndbPage) return;
+            resultsDiv.innerHTML = `<div class="search-status">❌ 搜索出错: ${e.message}</div>`;
+        } finally {
+            _vndbLoadingRequests = Math.max(0, _vndbLoadingRequests - 1);
+            if (_vndbLoadingRequests === 0) {
+                btn.disabled = false;
+                btn.textContent = "搜索";
+            }
+        }
+    }
+
+    // renderVNDBResults 渲染 VNDB 搜索结果卡片和分页。
+    function renderVNDBResults(data) {
+        const resultsDiv = document.getElementById("searchResults");
+        vndbTotal = data.total || 0;
+        const items = data.results || [];
+        const totalPages = Math.max(1, Math.ceil(vndbTotal / PAGE_SIZE));
+
+        const infoDiv = document.getElementById("resultInfo");
+        infoDiv.style.display = "flex";
+        document.getElementById("resultCount").textContent =
+            `共 ${vndbTotal} 个结果 · 第 ${vndbPage} / ${totalPages} 页`;
+
+        if (items.length === 0) {
+            resultsDiv.innerHTML = '<div class="search-status">没有找到相关作品</div>';
+            document.getElementById("pagination").innerHTML = "";
+            return;
+        }
+
+        resultsDiv.innerHTML = "";
+        const grid = document.createElement("div");
+        grid.className = "search-results";
+        resultsDiv.appendChild(grid);
+
+        items.forEach(item => {
+            const el = document.createElement("div");
+            el.className = "search-item";
+            const displayName = item.name_cn || item.name;
+            const subName = item.name_cn ? item.name : "";
+            const coverSrc = item.cover || "";
+            const score = item.score ? `⭐${item.score.toFixed(1)}` : "";
+
+            el.innerHTML = `
+                ${coverSrc
+                    ? `<img class="search-item-img" src="${coverSrc}" alt="${displayName}" loading="lazy"
+                           onerror="this.style.display='none'">`
+                    : `<div class="search-item-img" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:24px;">无图</div>`
+                }
+                <div class="search-item-info">
+                    <div class="search-item-name" title="${displayName}">${displayName}</div>
+                    ${subName ? `<div class="search-item-sub" title="${subName}">${subName}</div>` : ""}
+                </div>
+                <div class="search-item-meta">
+                    <span class="source-badge source-vndb">VNDB</span>
+                    ${score ? `<span class="search-item-score">${score}</span>` : ""}
+                </div>
+            `;
+            el.onclick = () => downloadAndApplyCover(item, "vndb");
+            grid.appendChild(el);
+        });
+
+        renderVNDBPagination(totalPages);
+    }
+
+    // renderVNDBPagination 渲染 VNDB 分页按钮。
+    function renderVNDBPagination(totalPages) {
+        const pag = document.getElementById("pagination");
+        pag.innerHTML = "";
+        if (totalPages <= 1) return;
+
+        const addBtn = (label, page, disabled = false, active = false) => {
+            const b = document.createElement("button");
+            b.className = "page-btn" + (active ? " active" : "");
+            b.textContent = label;
+            b.disabled = disabled;
+            if (!disabled && !active) b.onclick = () => goToVNDBPage(page);
+            pag.appendChild(b);
+        };
+        const addEllipsis = () => {
+            const s = document.createElement("span");
+            s.className = "page-ellipsis";
+            s.textContent = "…";
+            pag.appendChild(s);
+        };
+
+        addBtn("‹", vndbPage - 1, vndbPage <= 1);
+        const WING = 2;
+        let lo = Math.max(1, vndbPage - WING);
+        let hi = Math.min(totalPages, vndbPage + WING);
+        if (lo > 1) { addBtn("1", 1); if (lo > 2) addEllipsis(); }
+        for (let p = lo; p <= hi; p++) addBtn(String(p), p, false, p === vndbPage);
+        if (hi < totalPages) { if (hi < totalPages - 1) addEllipsis(); addBtn(String(totalPages), totalPages); }
+        addBtn("›", vndbPage + 1, vndbPage >= totalPages);
+    }
+
+    // goToVNDBPage 跳转 VNDB 指定页。
+    function goToVNDBPage(page) {
+        vndbPage = page;
+        const keyword = document.getElementById("searchInput").value.trim();
+        const key = vndbPageCacheKey(keyword, page);
+        const shouldShowLoading = !_vndbPageCache.has(key) && !_vndbInflight.has(key);
+        loadAndRenderVNDBPage(page, shouldShowLoading);
+        document.getElementById("searchResults").scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     // saveState 将格子数据保存到服务端 state.json。
