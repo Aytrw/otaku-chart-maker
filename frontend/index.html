@@ -1009,7 +1009,7 @@
                 <div class="source-selector-row">
                     <div class="source-btn-wrap">
                         <button class="source-btn active" data-source="bgm" onclick="setSource('bgm')"
-                            title="Bangumi 番组计划 — 综合性 ACGN 信息站，收录动画、漫画、游戏、音乐、轻小说等条目，拥有丰富的标签和评分体系">📺 Bangumi</button>
+                            title="Bangumi 番组计划 — 综合性 ACGN 信息站，收录动画、漫画、游戏、音乐、小说等条目，拥有丰富的标签和评分体系">📺 Bangumi</button>
                         <span class="source-desc">动画 / 漫画 / 游戏 / 小说</span>
                     </div>
                     <div class="source-btn-wrap">
@@ -1029,7 +1029,7 @@
                         <button class="type-btn active" data-type="all" onclick="setSubjectType('all')">📦 全部</button>
                         <button class="type-btn" data-type="anime" onclick="setSubjectType('anime')">🎥 动画</button>
                         <button class="type-btn" data-type="manga" onclick="setSubjectType('manga')">📖 漫画</button>
-                        <button class="type-btn" data-type="novel" onclick="setSubjectType('novel')">📝 轻小说</button>
+                        <button class="type-btn" data-type="novel" onclick="setSubjectType('novel')">📝 小说</button>
                         <button class="type-btn" data-type="game" onclick="setSubjectType('game')">🎮 游戏</button>
                     </div>
                     <div class="section-label">排序方式</div>
@@ -1946,7 +1946,7 @@
             const typeClass = typeLabel === "动画" ? "type-anime"
                             : typeLabel === "游戏" ? "type-game"
                             : typeLabel === "漫画" ? "type-manga"
-                            : typeLabel === "轻小说" ? "type-novel" : "";
+                            : typeLabel === "小说" ? "type-novel" : "";
             const score = item.score ? `⭐${item.score}` : "";
 
             el.innerHTML = `

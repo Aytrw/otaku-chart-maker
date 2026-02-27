@@ -79,7 +79,7 @@ func bookLabelFromPlatform(platform string) string {
 	case "漫画":
 		return "漫画"
 	case "小说":
-		return "轻小说"
+		return "小说"
 	default:
 		return "书籍"
 	}
