@@ -643,17 +643,28 @@
         }
         .tag-cat-row {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 6px;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         .tag-cat-row:last-child { margin-bottom: 0; }
         .tag-cat-label {
             font-size: 11px;
-            color: #999;
+            color: #888;
             white-space: nowrap;
-            min-width: 32px;
-            font-weight: bold;
+            min-width: 30px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            padding-top: 3px;
+            flex-shrink: 0;
+        }
+        .tag-cat-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex-shrink: 0;
         }
         .tag-cat-group {
             display: flex;
@@ -1153,16 +1164,16 @@
 
     // 搜索面板的题材标签分组，用于 Bangumi tag 浏览。
     const allTags = [
-        { label: "情感", tags: ["治愈", "搞笑", "热血", "感动", "催泪", "致郁", "恐怖", "温馨", "燃", "虐心", "压抑", "紧张"] },
-        { label: "恋爱", tags: ["恋爱", "青春", "百合", "BL", "后宫", "纯爱", "暗恋", "三角关系", "初恋", "姐弟恋"] },
-        { label: "日常", tags: ["日常", "校园", "职场", "美食", "音乐", "偶像", "运动", "旅行", "料理", "家庭", "社团"] },
-        { label: "战斗", tags: ["战斗", "冒险", "超能力", "竞技", "格斗", "军事", "机战", "武术", "生存", "魔法少女"] },
-        { label: "推理", tags: ["推理", "悬疑", "智斗", "犯罪", "惊悚", "心理", "侦探", "复仇", "解谜"] },
-        { label: "幻想", tags: ["奇幻", "科幻", "机甲", "赛博朋克", "魔法", "妖怪", "吸血鬼", "玄幻", "人外"] },
-        { label: "背景", tags: ["异世界", "穿越", "转生", "架空", "末日", "史诗", "神话", "历史", "宫廷", "近未来", "废土", "太空"] },
-        { label: "叙事", tags: ["剧情", "原创", "改编", "写实", "叙述性诡计", "时间循环", "群像剧", "意识流"] },
-        { label: "角色", tags: ["群像", "伪娘", "兽耳", "傲娇", "病娇", "天然呆", "腹黑", "女仆", "大小姐", "萌系"] },
-        { label: "受众", tags: ["少年", "少女", "青年", "乙女", "GL", "子供向", "猎奇", "女性向"] },
+        { label: "情感", color: "#e84393", tags: ["治愈", "搞笑", "热血", "感动", "催泪", "致郁", "恐怖", "温馨", "燃", "虐心", "压抑", "紧张", "轻松", "浪漫", "荒诞", "黑暗"] },
+        { label: "恋爱", color: "#fd79a8", tags: ["恋爱", "百合", "BL", "后宫", "纯爱", "暗恋", "三角关系", "初恋", "青梅竹马", "姐弟恋", "师生恋", "同居", "异地恋", "妹控", "NTR"] },
+        { label: "日常", color: "#fdcb6e", tags: ["日常", "校园", "青春", "职场", "美食", "音乐", "偶像", "运动", "旅行", "料理", "家庭", "社团", "乡村", "宠物", "露营", "钓鱼"] },
+        { label: "动作", color: "#e17055", tags: ["战斗", "冒险", "超能力", "竞技", "格斗", "军事", "机战", "武术", "生存", "魔法少女", "特工", "暗杀", "异能", "复仇"] },
+        { label: "悬疑", color: "#a29bfe", tags: ["推理", "悬疑", "智斗", "犯罪", "惊悚", "心理", "侦探", "解谜", "密室", "谋略", "间谍", "阴谋", "猎奇", "黑帮"] },
+        { label: "幻想", color: "#74b9ff", tags: ["奇幻", "科幻", "机甲", "赛博朋克", "魔法", "妖怪", "吸血鬼", "玄幻", "人外", "精灵", "蒸汽朋克", "克苏鲁", "都市奇幻"] },
+        { label: "设定", color: "#00cec9", tags: ["异世界", "穿越", "转生", "架空", "末日", "史诗", "神话", "历史", "宫廷", "近未来", "废土", "太空", "战争", "中世纪", "江户", "现代"] },
+        { label: "叙事", color: "#636e72", tags: ["剧情", "原创", "改编", "写实", "叙述性诡计", "时间循环", "群像剧", "意识流", "反转", "多线叙事", "短篇", "长篇", "非线性"] },
+        { label: "属性", color: "#fab1a0", tags: ["群像", "伪娘", "兽耳", "傲娇", "病娇", "天然呆", "腹黑", "女仆", "大小姐", "萌系", "妹系", "正太", "萝莉", "眼镜", "龙傲天"] },
+        { label: "受众", color: "#b2bec3", tags: ["少年", "少女", "青年", "乙女", "GL", "子供向", "女性向", "男性向", "泡面番", "全年龄", "成人向", "R18"] },
     ];
 
     // 搜索状态
@@ -1661,10 +1672,10 @@
     function initTagBrowser() {
         const browser = document.getElementById("tagBrowser");
         browser.innerHTML = "";
-        allTags.forEach(({ label, tags }) => {
+        allTags.forEach(({ label, color, tags }) => {
             const row = document.createElement("div");
             row.className = "tag-cat-row";
-            row.innerHTML = `<span class="tag-cat-label">${label}</span>`;
+            row.innerHTML = `<span class="tag-cat-label"><span class="tag-cat-dot" style="background:${color}"></span>${label}</span>`;
             const group = document.createElement("div");
             group.className = "tag-cat-group";
             tags.forEach(tag => {
