@@ -199,6 +199,7 @@ type BrowseResult struct {
 	Cover     string  `json:"cover"`
 	TypeLabel string  `json:"type_label"`
 	Score     float64 `json:"score"`
+	Summary   string  `json:"summary,omitempty"`
 }
 
 // BrowseResponse 是浏览接口的响应。
@@ -278,6 +279,7 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 			Type     int       `json:"type"`
 			Score    float64   `json:"score"`
 			Platform string    `json:"platform"`
+			Summary  string    `json:"summary"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rawJSON, &raw); err != nil {
@@ -301,6 +303,7 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 			Cover:     it.Images.bestURL(),
 			TypeLabel: label,
 			Score:     it.Score,
+			Summary:   truncateRunes(it.Summary, 80),
 		})
 	}
 
