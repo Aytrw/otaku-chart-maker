@@ -2339,6 +2339,13 @@
             const layout = computeCropLayout(img.naturalWidth, img.naturalHeight, r, crop);
             applyCropLayoutToElement(img, layout);
         };
+        img.onerror = () => {
+            img.style.display = "none";
+            const ph = document.createElement("span");
+            ph.className = "placeholder";
+            ph.textContent = "✕";
+            area.appendChild(ph);
+        };
         area.appendChild(img);
 
         // 悬停工具栏：裁剪 + 清除
@@ -2455,13 +2462,14 @@
         // 交错播放移除动画
         const items = document.querySelectorAll(".cover-item.selected");
         items.forEach((el, i) => {
-            el.style.animationDelay = `${i * 40}ms`;
+            el.style.animationDelay = `${Math.min(i * 40, 800)}ms`;
             el.classList.add("removing");
         });
-        const animDuration = Math.min(items.length * 40 + 300, 1200);
+        const animDuration = Math.min(items.length * 40 + 300, 1400);
         await new Promise(r => setTimeout(r, animDuration));
 
-        // 发起删除请求
+        // 发起删除请求，仅在成功后移除 DOM 元素
+        let deleteOk = false;
         try {
             const resp = await fetch("/api/delete-cover", {
                 method: "POST",
@@ -2470,14 +2478,36 @@
             });
             const data = await resp.json();
             if (data.error) { alert("删除失败: " + data.error); }
+            else { deleteOk = true; }
         } catch (e) {
             alert("删除出错: " + e.message);
+        }
+
+        if (!deleteOk) {
+            // 删除失败：撤销动画，恢复卡片
+            items.forEach(el => { el.classList.remove("removing"); el.style.animationDelay = ""; });
+            document.getElementById("batchDeleteBtn").disabled = false;
+            return;
         }
 
         // 直接从 DOM 移除已删除卡片，避免重建整个网格引起卡顿
         items.forEach(el => el.remove());
         _selectedCovers.clear();
         coverUrls = coverUrls.filter(c => !names.includes(c.name));
+
+        // 清除引用了已删封面的格子
+        const deletedPaths = new Set(names.map(n => "covers/" + encodeURIComponent(n)));
+        for (let ci = 0; ci < cellImages.length; ci++) {
+            if (cellImages[ci] && deletedPaths.has(cellImages[ci])) {
+                cellImages[ci] = null;
+                cellCrops[ci] = null;
+                cellSubjectIDs[ci] = null;
+                cellSwapOffsets[ci] = 0;
+                renderCellImage(ci);
+            }
+        }
+        saveState();
+        updateProgressBar();
 
         // 更新数量角标和批量栏
         const badge = document.getElementById("coverCountBadge");
@@ -2509,10 +2539,11 @@
             const item = document.createElement("div");
             item.className = "cover-item cover-entering" + (_deleteMode ? " select-mode" : "") + (_selectedCovers.has(name) ? " selected" : "");
             item.dataset.name = name;
-            item.style.animationDelay = `${i * 30}ms`;
+            item.style.animationDelay = `${Math.min(i * 30, 600)}ms`;
+            const safeName = escapeHtml(name);
             item.innerHTML = `
-                <img src="${url}" alt="${name}" loading="lazy">
-                <div class="cover-item-name" title="${name}">${name}</div>
+                <img src="${url}" alt="${safeName}" loading="lazy">
+                <div class="cover-item-name" title="${safeName}">${safeName}</div>
                 <div class="cover-item-check">✓</div>
             `;
             // 入场动画结束后移除 entering 类，避免影响后续 transition
@@ -2627,6 +2658,8 @@
         const i = activeCellIndex;
         cellImages[i] = url;
         cellCrops[i] = defaultCrop();
+        cellSubjectIDs[i] = null;
+        cellSwapOffsets[i] = 0;
         renderCellImage(i, name);
         closeModal();
         hidePopover();
@@ -3104,11 +3137,12 @@
             ? Math.floor(items.length / cols) * cols
             : items.length;
 
+        const isRankSort = document.getElementById("sortSelect").value === "rank";
         items.slice(0, displayCount).forEach(item => {
             const el = document.createElement("div");
             el.className = "search-item";
-            const displayName = item.name_cn || item.name;
-            const subName = item.name_cn ? item.name : "";
+            const displayName = escapeHtml(item.name_cn || item.name || "");
+            const subName = item.name_cn ? escapeHtml(item.name) : "";
             const coverSrc = item.cover || "";
             const typeLabel = item.type_label || "";
             const typeClass = typeLabel === "动画" ? "type-anime"
@@ -3116,7 +3150,6 @@
                             : typeLabel === "漫画" ? "type-manga"
                             : typeLabel === "小说" ? "type-novel" : "";
             const score = item.score ? `⭐${item.score}` : "";
-            const isRankSort = document.getElementById("sortSelect").value === "rank";
             const rankClass = typeLabel === "动画" ? "rank-anime"
                             : typeLabel === "游戏" ? "rank-game"
                             : typeLabel === "漫画" ? "rank-manga"
@@ -3125,7 +3158,7 @@
 
             el.innerHTML = `
                 ${coverSrc
-                    ? `<img class="search-item-img" src="${coverSrc}" alt="${displayName}" loading="lazy"
+                    ? `<img class="search-item-img" src="${escapeHtml(coverSrc)}" alt="${displayName}" loading="lazy"
                            onerror="this.style.display='none'">`
                     : `<div class="search-item-img" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:24px;">无图</div>`
                 }
@@ -3135,7 +3168,7 @@
                     ${subName ? `<div class="search-item-sub" title="${subName}">${subName}</div>` : ""}
                 </div>
                 <div class="search-item-meta">
-                    ${typeLabel ? `<span class="search-item-type ${typeClass}">${typeLabel}</span>` : ""}
+                    ${typeLabel ? `<span class="search-item-type ${typeClass}">${escapeHtml(typeLabel)}</span>` : ""}
                     ${score ? `<span class="search-item-score">${score}</span>` : ""}
                 </div>
             `;
@@ -3225,11 +3258,12 @@
 
             // 将下载的封面应用到当前格子
             const coverPath = "covers/" + encodeURIComponent(data.filename);
-            // 记录作品 ID 用于推荐去重
+            selectCover(coverPath, data.filename);
+            // 记录作品 ID 用于推荐去重（需在 selectCover 之后设置，因为 selectCover 会重置）
             if (source !== "vndb" && typeof item.id === "number") {
                 cellSubjectIDs[activeCellIndex] = item.id;
+                saveState();
             }
-            selectCover(coverPath, data.filename);
             await loadCovers();
         } catch (e) {
             alert("下载出错: " + e.message);
@@ -3367,14 +3401,14 @@
         items.slice(0, displayCount).forEach(item => {
             const el = document.createElement("div");
             el.className = "search-item";
-            const displayName = item.name_cn || item.name;
-            const subName = item.name_cn ? item.name : "";
+            const displayName = escapeHtml(item.name_cn || item.name || "");
+            const subName = item.name_cn ? escapeHtml(item.name) : "";
             const coverSrc = item.cover || "";
             const score = item.score ? `⭐${item.score.toFixed(1)}` : "";
 
             el.innerHTML = `
                 ${coverSrc
-                    ? `<img class="search-item-img" src="${coverSrc}" alt="${displayName}" loading="lazy"
+                    ? `<img class="search-item-img" src="${escapeHtml(coverSrc)}" alt="${displayName}" loading="lazy"
                            onerror="this.style.display='none'">`
                     : `<div class="search-item-img" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:24px;">无图</div>`
                 }
