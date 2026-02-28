@@ -50,14 +50,14 @@ func makeRecommendKey(spec RecommendCellSpec) recommendQueryKey {
 	sorted := make([]string, len(spec.Tags))
 	copy(sorted, spec.Tags)
 	sort.Strings(sorted)
-	st := spec.SubjectType
-	if len(spec.Tags) == 0 && st == "" {
-		st = "anime" // 无标签时默认使用动画类型
+	subjectType := spec.SubjectType
+	if len(spec.Tags) == 0 && subjectType == "" {
+		subjectType = "anime"
 	}
 	return recommendQueryKey{
 		tags:        strings.Join(sorted, "\x00"),
 		sortBy:      spec.Sort,
-		subjectType: st,
+		subjectType: subjectType,
 	}
 }
 

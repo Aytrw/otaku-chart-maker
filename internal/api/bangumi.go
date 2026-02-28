@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // Bangumi API 地址和请求参数。
@@ -98,6 +100,7 @@ type Client struct {
 	coversDir string
 	mu        sync.Mutex
 	cache     map[string]cacheEntry
+	flight    singleflight.Group // 合并相同 key 的并发请求
 }
 
 // cacheEntry 是缓存中的一条记录（原始 JSON + 过期时间）。
@@ -327,7 +330,6 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 
 // enrichSummaries 并发请求 v0 条目详情接口，为缺少简介的结果补充 summary。
 func (c *Client) enrichSummaries(results []BrowseResult) {
-	// 收集需要补充简介的索引
 	type job struct{ idx, id int }
 	var jobs []job
 	for i, r := range results {
@@ -339,16 +341,22 @@ func (c *Client) enrichSummaries(results []BrowseResult) {
 		return
 	}
 
-	// 有限并发：使用 semaphore channel 控制同时在途请求数
+	// 收集结果后统一写回，避免并发写 slice 的数据竞争
+	type summaryResult struct {
+		idx     int
+		summary string
+	}
+	ch := make(chan summaryResult, len(jobs))
 	sem := make(chan struct{}, summaryMaxWorker)
 	var wg sync.WaitGroup
+
 	for _, j := range jobs {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(idx, id int) {
 			defer func() { <-sem; wg.Done() }()
-			url := fmt.Sprintf("%s%d", bgmV0SubjectURL, id)
-			data, err := c.cachedGet(url)
+			apiURL := fmt.Sprintf("%s%d", bgmV0SubjectURL, id)
+			data, err := c.cachedGet(apiURL)
 			if err != nil {
 				return
 			}
@@ -356,11 +364,15 @@ func (c *Client) enrichSummaries(results []BrowseResult) {
 				Summary string `json:"summary"`
 			}
 			if json.Unmarshal(data, &subj) == nil && subj.Summary != "" {
-				results[idx].Summary = truncateRunes(subj.Summary, 300)
+				ch <- summaryResult{idx: idx, summary: truncateRunes(subj.Summary, 300)}
 			}
 		}(j.idx, j.id)
 	}
-	wg.Wait()
+
+	go func() { wg.Wait(); close(ch) }()
+	for sr := range ch {
+		results[sr.idx].Summary = sr.summary
+	}
 }
 
 // ---- 封面下载 ----
@@ -532,10 +544,11 @@ func (c *Client) cachedPost(apiURL string, body any) ([]byte, error) {
 	return result, nil
 }
 
-// cachedGet 带缓存的 GET 请求（用于获取单个条目详情等）。
+// cachedGet 带缓存的 GET 请求，使用 singleflight 合并相同 URL 的并发调用。
 func (c *Client) cachedGet(apiURL string) ([]byte, error) {
 	key := makeCacheKey(apiURL, nil)
 
+	// 先查缓存
 	now := time.Now()
 	c.mu.Lock()
 	if entry, ok := c.cache[key]; ok {
@@ -547,19 +560,24 @@ func (c *Client) cachedGet(apiURL string) ([]byte, error) {
 	}
 	c.mu.Unlock()
 
-	result, err := c.bgmGet(apiURL)
+	// singleflight: 相同 key 的并发请求只执行一次网络调用
+	v, err, _ := c.flight.Do(key, func() (any, error) {
+		result, err := c.bgmGet(apiURL)
+		if err != nil {
+			return nil, err
+		}
+		cachedAt := time.Now()
+		c.mu.Lock()
+		c.cache[key] = cacheEntry{data: result, expire: cachedAt.Add(cacheTTL), added: cachedAt}
+		c.pruneExpiredLocked(cachedAt)
+		c.evictOverflowLocked()
+		c.mu.Unlock()
+		return result, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	cachedAt := time.Now()
-	c.mu.Lock()
-	c.cache[key] = cacheEntry{data: result, expire: cachedAt.Add(cacheTTL), added: cachedAt}
-	c.pruneExpiredLocked(cachedAt)
-	c.evictOverflowLocked()
-	c.mu.Unlock()
-
-	return result, nil
+	return v.([]byte), nil
 }
 
 // startCacheCleaner 周期清理过期缓存，避免长期运行时缓存膨胀。
