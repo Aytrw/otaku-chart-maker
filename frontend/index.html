@@ -1739,7 +1739,7 @@
         <div class="quick-search-footer">
             <button class="quick-search-action-btn" onclick="quickSearchShowRec()">🎲 推荐</button>
             <button class="quick-search-action-btn" onclick="quickSearchRefresh()" id="quickSearchRefreshBtn" style="display:none">🔄 换一批</button>
-            <button class="quick-search-action-btn" onclick="quickSearchOpenFull()">🔍 高级筛选</button>
+            <button class="quick-search-action-btn" onclick="quickSearchOpenFull()" title="导入本地封面、按标签浏览、VNDB 搜索等">📂 更多来源</button>
         </div>
     </div>
 
@@ -3945,9 +3945,27 @@
                         ${score ? `<span class="qs-item-score">⭐${score}</span>` : ""}
                         ${typeLabel ? `<span class="qs-item-type">${escapeHtml(typeLabel)}</span>` : ""}
                     </div>
-                    ${summary ? `<div class="qs-item-desc">${summary}</div>` : ""}
+                    ${summary ? `<div class="qs-item-desc">${summary}</div><div class="qs-item-desc-ind"><svg viewBox="0 0 16 16"><polyline points="4,6 8,10 12,6"/></svg></div>` : ""}
                 </div>
             `;
+            // 简介展开/收起
+            const descEl = el.querySelector(".qs-item-desc");
+            const indEl = el.querySelector(".qs-item-desc-ind");
+            if (descEl && indEl) {
+                requestAnimationFrame(() => {
+                    if (descEl.scrollHeight <= descEl.clientHeight + 1) {
+                        indEl.style.display = "none";
+                        descEl.style.cursor = "default";
+                    }
+                });
+                const toggleDesc = (e) => {
+                    e.stopPropagation();
+                    const isNowExpanded = descEl.classList.toggle("expanded");
+                    indEl.classList.toggle("expanded", isNowExpanded);
+                };
+                descEl.addEventListener("click", toggleDesc);
+                indEl.addEventListener("click", toggleDesc);
+            }
             el.onclick = () => quickSearchSelectItem(item);
             list.appendChild(el);
         });
