@@ -228,6 +228,11 @@ func (c *VNDBClient) DownloadCover(imgURL, filename string) (*DownloadResult, er
 	}
 
 	filename = sanitizeFilename(imgURL, filename)
+
+	// 同名封面已存在则直接复用，跳过重复下载
+	if existing := findExistingCover(c.coversDir, filename); existing != nil {
+		return existing, nil
+	}
 	req, err := http.NewRequest(http.MethodGet, imgURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("构建请求失败: %w", err)
@@ -255,7 +260,7 @@ func (c *VNDBClient) DownloadCover(imgURL, filename string) (*DownloadResult, er
 	}
 
 	filename = fixExtByContentType(filename, ct)
-	filename = uniqueFilename(c.coversDir, filename)
+	filename = UniqueFilename(c.coversDir, filename)
 	_ = os.MkdirAll(c.coversDir, 0o755)
 	savePath := filepath.Join(c.coversDir, filename)
 	if err := os.WriteFile(savePath, data, 0o644); err != nil {
@@ -411,23 +416,39 @@ func (c *VNDBClient) pruneExpiredLocked(now time.Time) {
 	}
 }
 
-// evictOverflowLocked 按最早加入顺序淘汰超限缓存。
+// evictOverflowLocked 当缓存超过上限时批量淘汰最早加入的条目（调用方需持锁）。
 func (c *VNDBClient) evictOverflowLocked() {
-	for len(c.cache) > vndbCacheMaxEntries {
-		var oldestKey string
-		var oldestAt time.Time
-		found := false
-		for key, entry := range c.cache {
-			if !found || entry.added.Before(oldestAt) {
-				oldestKey = key
-				oldestAt = entry.added
-				found = true
+	excess := len(c.cache) - vndbCacheMaxEntries
+	if excess <= 0 {
+		return
+	}
+	victims := make([]struct {
+		key   string
+		added time.Time
+	}, 0, excess)
+	for key, entry := range c.cache {
+		if len(victims) < excess {
+			victims = append(victims, struct {
+				key   string
+				added time.Time
+			}{key, entry.added})
+		} else {
+			newest := 0
+			for vi := 1; vi < len(victims); vi++ {
+				if victims[vi].added.After(victims[newest].added) {
+					newest = vi
+				}
+			}
+			if entry.added.Before(victims[newest].added) {
+				victims[newest] = struct {
+					key   string
+					added time.Time
+				}{key, entry.added}
 			}
 		}
-		if !found {
-			return
-		}
-		delete(c.cache, oldestKey)
+	}
+	for _, v := range victims {
+		delete(c.cache, v.key)
 	}
 }
 

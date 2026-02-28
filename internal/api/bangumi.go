@@ -194,6 +194,7 @@ type BrowseRequest struct {
 	Limit       int      `json:"limit"`
 	Sort        string   `json:"sort"`
 	SubjectType string   `json:"subjectType"`
+	MinRating   float64  `json:"minRating,omitempty"` // 最低评分筛选，0 表示不筛选
 }
 
 // BrowseResult 表示一条浏览结果。
@@ -204,6 +205,7 @@ type BrowseResult struct {
 	Cover     string  `json:"cover"`
 	TypeLabel string  `json:"type_label"`
 	Score     float64 `json:"score"`
+	Rank      int     `json:"rank,omitempty"`
 	Summary   string  `json:"summary,omitempty"`
 }
 
@@ -252,6 +254,12 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 	if len(tags) > 0 {
 		filter["tag"] = tags
 	}
+	if req.MinRating > 0 {
+		filter["rating"] = []string{fmt.Sprintf(">=%g", req.MinRating)}
+	}
+	if req.Sort == "rank" {
+		filter["rank"] = []string{">=1"} // 排除无排名条目，避免 rank=0 排在最前
+	}
 	apiBody["filter"] = filter
 
 	// 书籍子类型（漫画/小说）需要 platform 过滤，会减少结果数。
@@ -273,18 +281,21 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 		return nil, err
 	}
 
-	// 解析 v0 API 响应格式（platform 字段区分漫画/小说等书籍子类型）
+	// 解析 v0 API 响应格式（score/rank 嵌套在 rating 对象中）
 	var raw struct {
 		Total int `json:"total"`
 		Data  []struct {
-			ID       int       `json:"id"`
-			Name     string    `json:"name"`
-			NameCN   string    `json:"name_cn"`
-			Images   bgmImages `json:"images"`
-			Type     int       `json:"type"`
-			Score    float64   `json:"score"`
-			Platform string    `json:"platform"`
-			Summary  string    `json:"summary"`
+			ID     int       `json:"id"`
+			Name   string    `json:"name"`
+			NameCN string    `json:"name_cn"`
+			Images bgmImages `json:"images"`
+			Type   int       `json:"type"`
+			Rating struct {
+				Score float64 `json:"score"`
+				Rank  int     `json:"rank"`
+			} `json:"rating"`
+			Platform string `json:"platform"`
+			Summary  string `json:"summary"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rawJSON, &raw); err != nil {
@@ -307,7 +318,8 @@ func (c *Client) Browse(req BrowseRequest) (*BrowseResponse, error) {
 			NameCN:    it.NameCN,
 			Cover:     it.Images.bestURL(),
 			TypeLabel: label,
-			Score:     it.Score,
+			Score:     it.Rating.Score,
+			Rank:      it.Rating.Rank,
 			Summary:   truncateRunes(it.Summary, 300),
 		})
 	}
@@ -392,6 +404,11 @@ func (c *Client) DownloadCover(imgURL, filename string) (*DownloadResult, error)
 	}
 	filename = sanitizeFilename(imgURL, filename)
 
+	// 同名封面已存在则直接复用，跳过重复下载
+	if existing := findExistingCover(c.coversDir, filename); existing != nil {
+		return existing, nil
+	}
+
 	// 下载图片
 	req, err := http.NewRequest("GET", imgURL, nil)
 	if err != nil {
@@ -422,7 +439,7 @@ func (c *Client) DownloadCover(imgURL, filename string) (*DownloadResult, error)
 
 	// 根据 Content-Type 修正扩展名，避免覆盖同名文件
 	filename = fixExtByContentType(filename, resp.Header.Get("Content-Type"))
-	filename = uniqueFilename(c.coversDir, filename)
+	filename = UniqueFilename(c.coversDir, filename)
 
 	// 写入文件
 	_ = os.MkdirAll(c.coversDir, 0o755)
@@ -507,7 +524,7 @@ func (c *Client) bgmPost(apiURL string, bodyJSON []byte) ([]byte, error) {
 
 // ---- 缓存 ----
 
-// cachedPost 带缓存的 POST 请求（命中则直接返回，未命中则请求后存入缓存）。
+// cachedPost 带缓存的 POST 请求，使用 singleflight 合并相同请求体的并发调用。
 func (c *Client) cachedPost(apiURL string, body any) ([]byte, error) {
 	bodyJSON, err := json.Marshal(body)
 	if err != nil {
@@ -528,20 +545,24 @@ func (c *Client) cachedPost(apiURL string, body any) ([]byte, error) {
 	}
 	c.mu.Unlock()
 
-	// 请求 API 并写入缓存
-	result, err := c.bgmPost(apiURL, bodyJSON)
+	// singleflight: 相同 key 的并发请求只执行一次网络调用
+	v, err, _ := c.flight.Do(key, func() (any, error) {
+		result, err := c.bgmPost(apiURL, bodyJSON)
+		if err != nil {
+			return nil, err
+		}
+		cachedAt := time.Now()
+		c.mu.Lock()
+		c.cache[key] = cacheEntry{data: result, expire: cachedAt.Add(cacheTTL), added: cachedAt}
+		c.pruneExpiredLocked(cachedAt)
+		c.evictOverflowLocked()
+		c.mu.Unlock()
+		return result, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	cachedAt := time.Now()
-	c.mu.Lock()
-	c.cache[key] = cacheEntry{data: result, expire: cachedAt.Add(cacheTTL), added: cachedAt}
-	c.pruneExpiredLocked(cachedAt)
-	c.evictOverflowLocked()
-	c.mu.Unlock()
-
-	return result, nil
+	return v.([]byte), nil
 }
 
 // cachedGet 带缓存的 GET 请求，使用 singleflight 合并相同 URL 的并发调用。
@@ -600,23 +621,41 @@ func (c *Client) pruneExpiredLocked(now time.Time) {
 	}
 }
 
-// evictOverflowLocked 当缓存超过上限时按最早加入顺序淘汰（调用方需持锁）。
+// evictOverflowLocked 当缓存超过上限时批量淘汰最早加入的条目（调用方需持锁）。
 func (c *Client) evictOverflowLocked() {
-	for len(c.cache) > cacheMaxEntries {
-		var oldestKey string
-		var oldestAt time.Time
-		found := false
-		for key, entry := range c.cache {
-			if !found || entry.added.Before(oldestAt) {
-				oldestKey = key
-				oldestAt = entry.added
-				found = true
+	excess := len(c.cache) - cacheMaxEntries
+	if excess <= 0 {
+		return
+	}
+	// 一次遍历找出最早的 excess 个 key，避免多轮 O(n) 扫描
+	victims := make([]struct {
+		key   string
+		added time.Time
+	}, 0, excess)
+	for key, entry := range c.cache {
+		if len(victims) < excess {
+			victims = append(victims, struct {
+				key   string
+				added time.Time
+			}{key, entry.added})
+		} else {
+			// 找当前 victims 中最新的那个，看能否替换
+			newest := 0
+			for vi := 1; vi < len(victims); vi++ {
+				if victims[vi].added.After(victims[newest].added) {
+					newest = vi
+				}
+			}
+			if entry.added.Before(victims[newest].added) {
+				victims[newest] = struct {
+					key   string
+					added time.Time
+				}{key, entry.added}
 			}
 		}
-		if !found {
-			return
-		}
-		delete(c.cache, oldestKey)
+	}
+	for _, v := range victims {
+		delete(c.cache, v.key)
 	}
 }
 
@@ -660,8 +699,39 @@ func fixExtByContentType(filename, contentType string) string {
 	return filename
 }
 
-// uniqueFilename 如果同名文件已存在，加数字后缀避免覆盖。
-func uniqueFilename(dir, filename string) string {
+// findExistingCover 检查 covers 目录中是否已存在同名封面（忽略扩展名），有则直接复用。
+func findExistingCover(dir, filename string) *DownloadResult {
+	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		ext := strings.ToLower(filepath.Ext(name))
+		if !coverExts[ext] {
+			continue
+		}
+		if strings.TrimSuffix(name, filepath.Ext(name)) == base {
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			return &DownloadResult{
+				Filename: name,
+				Path:     "covers/" + name,
+				Size:     int(info.Size()),
+			}
+		}
+	}
+	return nil
+}
+
+// UniqueFilename 如果同名文件已存在，加数字后缀避免覆盖。
+func UniqueFilename(dir, filename string) string {
 	if _, err := os.Stat(filepath.Join(dir, filename)); os.IsNotExist(err) {
 		return filename
 	}

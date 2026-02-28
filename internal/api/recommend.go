@@ -109,6 +109,7 @@ func (c *Client) Recommend(req RecommendRequest) (*RecommendResponse, error) {
 				Sort:        info.key.sortBy,
 				SubjectType: info.key.subjectType,
 				Limit:       maxBrowseLimit,
+				MinRating:   5, // 过滤低评分作品，提升推荐质量
 			}
 			resp, err := c.Browse(browseReq)
 			if err == nil && resp != nil {

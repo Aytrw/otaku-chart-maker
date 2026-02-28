@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/Aytrw/otaku-chart-maker/internal/api"
 )
@@ -95,6 +93,7 @@ func (h *handler) routes() {
 	h.mux.HandleFunc("/api/recommend", h.handleRecommend)
 	h.mux.HandleFunc("/api/download-cover", h.handleDownloadCover)
 	h.mux.HandleFunc("/api/upload-cover", h.handleUploadCover)
+	h.mux.HandleFunc("/api/delete-cover", h.handleDeleteCover)
 	h.mux.HandleFunc("/api/vndb/search", h.handleVNDBSearch)
 }
 
@@ -441,7 +440,7 @@ func (h *handler) handleUploadCover(w http.ResponseWriter, r *http.Request) {
 
 	filename := header.Filename
 	_ = os.MkdirAll(h.coversDir, 0o755)
-	filename = uniqueFilename(h.coversDir, filename)
+	filename = api.UniqueFilename(h.coversDir, filename)
 	savePath := filepath.Join(h.coversDir, filename)
 	if err := os.WriteFile(savePath, data, 0o644); err != nil {
 		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存文件失败"})
@@ -456,20 +455,54 @@ func (h *handler) handleUploadCover(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// uniqueFilename 如果同名文件已存在，加数字后缀避免覆盖。
-func uniqueFilename(dir, filename string) string {
-	if _, err := os.Stat(filepath.Join(dir, filename)); os.IsNotExist(err) {
-		return filename
+// handleDeleteCover 删除 covers 目录下的封面文件，支持单个或批量。
+func (h *handler) handleDeleteCover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
 	}
-	ext := filepath.Ext(filename)
-	base := strings.TrimSuffix(filename, ext)
-	for n := 1; n <= 9999; n++ {
-		candidate := fmt.Sprintf("%s_%d%s", base, n, ext)
-		if _, err := os.Stat(filepath.Join(dir, candidate)); os.IsNotExist(err) {
-			return candidate
+
+	var req struct {
+		Filename  string   `json:"filename"`
+		Filenames []string `json:"filenames"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "解析请求失败"})
+		return
+	}
+
+	// 兼容单个和批量：合并到统一列表
+	names := req.Filenames
+	if req.Filename != "" {
+		names = append(names, req.Filename)
+	}
+	if len(names) == 0 {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少文件名"})
+		return
+	}
+
+	deleted := 0
+	var firstErr string
+	for _, name := range names {
+		clean := filepath.Base(name)
+		if clean != name || clean == "." || clean == ".." {
+			continue
 		}
+		if err := os.Remove(filepath.Join(h.coversDir, clean)); err != nil {
+			if !errors.Is(err, os.ErrNotExist) && firstErr == "" {
+				firstErr = err.Error()
+			}
+			continue
+		}
+		deleted++
 	}
-	return fmt.Sprintf("%s_%d%s", base, time.Now().UnixNano(), ext)
+
+	if deleted == 0 && firstErr != "" {
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "删除失败: " + firstErr})
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted": deleted})
 }
 
 // readJSON 从请求体解析 JSON 到目标结构。
