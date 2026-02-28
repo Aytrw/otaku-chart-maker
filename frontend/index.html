@@ -71,9 +71,31 @@
             background: #fff;
             display: flex;
             flex-direction: column;
-            transition: opacity 0.15s;
         }
-        .grid-cell:hover { opacity: 0.85; }
+        .grid-cell:hover {
+            z-index: 10;
+        }
+        .grid-cell.selected {
+            z-index: 10;
+        }
+
+        /* 格子悬停效果 - 极简 */
+        .cell-hover-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(234, 76, 137, 0.08);
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .grid-cell:hover .cell-hover-overlay {
+            opacity: 1;
+        }
+        /* 有封面的格子悬停时微暗 */
+        .grid-cell.has-cover .cell-hover-overlay {
+            background: rgba(0, 0, 0, 0.15);
+        }
 
         /* 首行首列边框 */
         .grid-cell:nth-child(6n+1) { border-left: 2px solid #333; }
@@ -91,12 +113,48 @@
         .cell-img-area img {
             position: absolute;
             image-rendering: auto;
+            transition: transform 0.3s;
+        }
+        .grid-cell:hover .cell-img-area img {
+            transform: scale(1.03);
         }
         .cell-img-area .placeholder {
             color: #ccc;
             font-size: 28px;
             user-select: none;
         }
+
+        /* 格子悬停工具栏 */
+        .cell-toolbar {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            display: flex;
+            gap: 3px;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 3;
+        }
+        .grid-cell:hover .cell-toolbar { opacity: 1; }
+        .cell-tool-btn {
+            width: 24px;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            transition: background 0.15s;
+        }
+        .cell-tool-btn:hover {
+            background: #ea4c89;
+        }
+        .cell-tool-btn.danger:hover { background: #ff6b6b; }
 
         .cell-label {
             height: 36px;
@@ -711,30 +769,6 @@
         }
         .sort-select:focus { border-color: #ea4c89; }
 
-        /* 封面编辑按钮 */
-        .cover-edit-btn {
-            position: absolute;
-            top: 4px; right: 4px;
-            width: 26px; height: 26px;
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            font-size: 13px;
-            cursor: pointer;
-            opacity: 0;
-            transition: opacity 0.15s;
-            z-index: 3;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            line-height: 1;
-        }
-        .cover-item:hover .cover-edit-btn { opacity: 1; }
-        .grid-cell:hover .cover-edit-btn { opacity: 1; }
-        .cover-edit-btn:hover { background: #ea4c89 !important; }
-
         /* 裁剪编辑器 */
         .crop-modal {
             display: none;
@@ -1006,193 +1040,576 @@
             white-space: nowrap;
             min-width: 70px;
         }
-        /* ========== 格子浮窗 ========== */
-        .cell-popover {
-            position: absolute;
-            z-index: 900;
+
+        /* ========== 快速搜索模态框 ========== */
+        .quick-search-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0);
+            z-index: 950;
+            transition: background 0.25s;
+            pointer-events: none;
+        }
+        .quick-search-backdrop.active {
+            background: rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
+        .quick-search-popup {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) translateY(8px);
+            z-index: 960;
             background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
-            padding: 14px;
-            width: 380px;
-            max-height: 420px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            animation: popoverIn 0.15s ease-out;
-        }
-        .cell-popover::-webkit-scrollbar { width: 5px; }
-        .cell-popover::-webkit-scrollbar-track { background: transparent; }
-        .cell-popover::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
-        @keyframes popoverIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .popover-arrow {
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            background: #fff;
-            transform: rotate(45deg);
-            box-shadow: -2px -2px 4px rgba(0,0,0,0.06);
-        }
-        .popover-arrow-left { left: -6px; }
-        .popover-arrow-right { right: -6px; }
-        .popover-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-        .popover-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: #333;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .popover-close {
-            background: none;
-            border: none;
-            font-size: 18px;
-            cursor: pointer;
-            color: #aaa;
-            padding: 0 2px;
-            line-height: 1;
-            flex-shrink: 0;
-        }
-        .popover-close:hover { color: #333; }
-        .popover-current {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 12px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        .popover-current-img {
-            width: 56px;
-            height: 75px;
-            border-radius: 6px;
-            object-fit: cover;
-            border: 1.5px solid #eee;
-            flex-shrink: 0;
-        }
-        .popover-current-info {
+            border-radius: 10px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+            width: 520px;
+            max-width: 92vw;
+            max-height: 78vh;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+        }
+        .quick-search-popup.active {
+            opacity: 1;
+            transform: translate(-50%, -50%) translateY(0);
+            pointer-events: auto;
+        }
+        .quick-search-header {
+            padding: 14px 16px 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .quick-search-icon { display: none; }
+        .quick-search-header-info { flex: 1; }
+        .quick-search-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+        .quick-search-subtitle {
+            font-size: 11px;
+            color: #aaa;
+        }
+        .quick-search-close {
+            width: 26px;
+            height: 26px;
+            border: none;
+            background: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #bbb;
+            display: flex;
+            align-items: center;
             justify-content: center;
-            gap: 6px;
+            transition: color 0.15s;
+            border-radius: 4px;
+        }
+        .quick-search-close:hover { color: #ea4c89; background: #fce4ec; }
+        .quick-search-body {
+            padding: 0 16px 10px;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .quick-search-input-wrap {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+        .quick-search-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .quick-search-input:focus { border-color: #ea4c89; }
+        .quick-search-btn {
+            padding: 8px 14px;
+            background: #ea4c89;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.15s;
+        }
+        .quick-search-btn:hover { background: #d63d7a; }
+        .quick-search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .quick-search-results {
+            flex: 1;
+            overflow-y: auto;
+            margin: 0 -4px;
+            padding: 0 4px 4px;
+        }
+        .quick-search-results::-webkit-scrollbar { width: 4px; }
+        .quick-search-results::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+        /* 列表式结果项 */
+        .qs-list { display: flex; flex-direction: column; gap: 6px; }
+        .qs-item {
+            display: flex;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.12s;
+            align-items: flex-start;
+        }
+        .qs-item:hover { background: #fce4ec; }
+        .qs-item-cover {
+            width: 48px;
+            height: 64px;
+            flex-shrink: 0;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #f5f5f5;
+        }
+        .qs-item-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .qs-item-body {
             flex: 1;
             min-width: 0;
         }
-        .popover-current-name {
+        .qs-item-name {
             font-size: 13px;
-            font-weight: bold;
-            color: #333;
+            font-weight: 500;
+            color: #222;
+            line-height: 1.3;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .popover-current-actions {
+        .qs-item-meta {
             display: flex;
+            align-items: center;
             gap: 6px;
-        }
-        .popover-action-btn {
-            padding: 4px 12px;
-            border: 1.5px solid #ddd;
-            border-radius: 6px;
-            background: #fff;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: pointer;
-            color: #555;
-            transition: all 0.15s;
-        }
-        .popover-action-btn:hover { border-color: #ea4c89; color: #ea4c89; }
-        .popover-action-btn.danger { border-color: #ff6b6b; color: #ff6b6b; }
-        .popover-action-btn.danger:hover { background: #ff6b6b; color: #fff; }
-        .popover-section-label {
+            margin-top: 2px;
             font-size: 11px;
             color: #999;
-            font-weight: 600;
-            margin-bottom: 8px;
         }
-        .popover-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 6px;
-            margin-bottom: 10px;
+        .qs-item-score { color: #ff9800; font-weight: 500; }
+        .qs-item-type {
+            padding: 1px 5px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            font-size: 10px;
+            color: #777;
         }
-        .popover-item {
-            cursor: pointer;
-            border: 2px solid #eee;
-            border-radius: 6px;
+        .qs-item-desc {
+            font-size: 11px;
+            color: #999;
+            line-height: 1.4;
+            margin-top: 3px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
-            background: #fff;
         }
-        .popover-item:hover {
-            border-color: #ea4c89;
-            box-shadow: 0 2px 10px rgba(234,76,137,0.2);
-            transform: scale(1.04);
-        }
-        .popover-item-img {
-            width: 100%;
-            aspect-ratio: 3/4;
-            object-fit: cover;
-            display: block;
-            background: #f5f5f5;
-        }
-        .popover-item-name {
-            font-size: 9px;
-            font-weight: bold;
-            color: #333;
-            padding: 2px 3px 1px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .popover-item-score {
-            font-size: 9px;
-            color: #ff9800;
-            font-weight: bold;
-            padding: 0 3px 2px;
-        }
-        .popover-loading {
+
+        .quick-search-loading, .quick-search-empty {
             text-align: center;
-            padding: 20px;
-            color: #aaa;
+            padding: 30px 16px;
+            color: #bbb;
             font-size: 12px;
         }
-        .popover-footer {
+        .quick-search-loading .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f0f0f0;
+            border-top-color: #ea4c89;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: 0 auto 8px;
+        }
+        .quick-search-hint {
+            font-size: 12px;
+            color: #ccc;
+            text-align: center;
+            padding: 24px 16px;
+        }
+        .quick-search-footer {
             display: flex;
-            justify-content: center;
-            gap: 10px;
-            padding-top: 8px;
+            gap: 8px;
+            padding: 8px 16px 10px;
             border-top: 1px solid #f0f0f0;
+            flex-shrink: 0;
         }
-        .popover-footer-btn {
-            padding: 6px 16px;
-            border: 1.5px solid #ddd;
-            border-radius: 16px;
+        .quick-search-action-btn {
+            flex: 1;
+            padding: 7px 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
             background: #fff;
-            font-size: 11px;
-            font-weight: bold;
+            font-size: 12px;
             cursor: pointer;
-            color: #555;
-            transition: all 0.15s;
+            color: #666;
+            transition: all 0.12s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
         }
-        .popover-footer-btn:hover { border-color: #ea4c89; color: #ea4c89; }
-        .popover-footer-btn.primary {
+        .quick-search-action-btn:hover {
+            border-color: #ea4c89;
+            color: #ea4c89;
+            background: #fff5f8;
+        }
+        .quick-search-action-btn.primary {
             background: #ea4c89;
             border-color: #ea4c89;
             color: #fff;
         }
-        .popover-footer-btn.primary:hover { background: #d93a77; }
-        .popover-backdrop {
+        .quick-search-action-btn.primary:hover {
+            background: #d63d7a;
+        }
+
+        /* ========== 侧边抽屉面板 ========== */
+        .drawer-backdrop {
             position: fixed;
             inset: 0;
-            z-index: 899;
+            background: rgba(0, 0, 0, 0);
+            z-index: 900;
+            transition: background 0.3s ease;
+            pointer-events: none;
+        }
+        .drawer-backdrop.active {
+            background: rgba(0, 0, 0, 0.4);
+            pointer-events: auto;
+        }
+        .cell-drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 420px;
+            max-width: 90vw;
+            height: 100vh;
+            background: #fff;
+            z-index: 901;
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -8px 0 40px rgba(0, 0, 0, 0.15);
+        }
+        .cell-drawer.active {
+            transform: translateX(0);
+        }
+        .drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            flex-shrink: 0;
+        }
+        .drawer-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .drawer-title-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #ea4c89, #f082ac);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 16px;
+        }
+        .drawer-close {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: #f5f5f5;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .drawer-close:hover {
+            background: #ea4c89;
+            color: #fff;
+            transform: rotate(90deg);
+        }
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+        }
+        .drawer-body::-webkit-scrollbar { width: 6px; }
+        .drawer-body::-webkit-scrollbar-track { background: transparent; }
+        .drawer-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+        .drawer-body::-webkit-scrollbar-thumb:hover { background: #ccc; }
+        .drawer-current {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            background: linear-gradient(135deg, #fef6f9 0%, #f8f4ff 100%);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            animation: fadeInUp 0.4s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .drawer-current-img {
+            width: 80px;
+            height: 107px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 2px solid #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            flex-shrink: 0;
+        }
+        .drawer-current-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+        .drawer-current-name {
+            font-size: 15px;
+            font-weight: bold;
+            color: #333;
+            line-height: 1.4;
+        }
+        .drawer-current-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .drawer-action-btn {
+            padding: 8px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            background: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .drawer-action-btn:hover {
+            border-color: #ea4c89;
+            color: #ea4c89;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(234, 76, 137, 0.2);
+        }
+        .drawer-action-btn.danger:hover {
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+            box-shadow: 0 4px 12px rgba(255, 107, 107, 0.2);
+        }
+        .drawer-section {
+            margin-bottom: 20px;
+        }
+        .drawer-section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #666;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .drawer-section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: linear-gradient(135deg, #ea4c89, #f082ac);
+            border-radius: 2px;
+        }
+        .drawer-rec-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .drawer-rec-item {
+            cursor: pointer;
+            border: 2px solid #f0f0f0;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            background: #fff;
+            position: relative;
+        }
+        .drawer-rec-item:hover {
+            border-color: #ea4c89;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(234, 76, 137, 0.2);
+        }
+        .drawer-rec-item::after {
+            content: '✓';
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            background: #ea4c89;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.2s;
+        }
+        .drawer-rec-item:hover::after {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .drawer-rec-img {
+            width: 100%;
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            display: block;
+            background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+        }
+        .drawer-rec-info {
+            padding: 8px 10px;
+        }
+        .drawer-rec-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+        .drawer-rec-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .drawer-rec-score {
+            font-size: 11px;
+            color: #ff9800;
+            font-weight: bold;
+        }
+        .drawer-rec-type {
+            font-size: 10px;
+            padding: 2px 6px;
+            background: #f0f0f0;
+            color: #666;
+            border-radius: 4px;
+        }
+        .drawer-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #999;
+        }
+        .drawer-loading .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #f0f0f0;
+            border-top-color: #ea4c89;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+        .drawer-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+        .drawer-empty-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        .drawer-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            gap: 12px;
+            flex-shrink: 0;
+            background: #fafafa;
+        }
+        .drawer-footer-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            background: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .drawer-footer-btn:hover {
+            border-color: #ea4c89;
+            color: #ea4c89;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(234, 76, 137, 0.15);
+        }
+        .drawer-footer-btn.primary {
+            background: linear-gradient(135deg, #ea4c89, #f082ac);
+            border-color: transparent;
+            color: #fff;
+        }
+        .drawer-footer-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(234, 76, 137, 0.35);
+        }
+        /* 脉冲动画 */
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .pulse {
+            animation: pulse 0.3s ease;
+        }
+        /* 成功反馈动画 */
+        @keyframes successPop {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .success-pop {
+            animation: successPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         .fill-overlay {
             position: fixed;
@@ -1235,72 +1652,6 @@
             color: #999;
             margin-top: 4px;
         }
-        .welcome-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 5000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .welcome-box {
-            background: #fff;
-            padding: 36px 40px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.2);
-            max-width: 420px;
-            width: 92%;
-        }
-        .welcome-title {
-            font-size: 22px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 8px;
-        }
-        .welcome-sub {
-            font-size: 14px;
-            color: #888;
-            margin-bottom: 24px;
-            line-height: 1.6;
-        }
-        .welcome-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .welcome-btn-primary {
-            padding: 14px 24px;
-            background: linear-gradient(135deg, #ea4c89, #f082ac);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(234,76,137,0.3);
-            transition: transform 0.15s, box-shadow 0.15s;
-        }
-        .welcome-btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(234,76,137,0.4);
-        }
-        .welcome-btn-secondary {
-            padding: 12px 24px;
-            background: #f5f5f5;
-            color: #666;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-        .welcome-btn-secondary:hover { background: #eee; }
-        .ctrl-btn.recommend-btn {
-            background: linear-gradient(135deg, #ea4c89, #f082ac);
-            box-shadow: 0 3px 10px rgba(234, 76, 137, 0.3);
-        }
         .ctrl-btn.secondary-btn {
             background: #f5f5f5;
             color: #666;
@@ -1322,36 +1673,69 @@
     </div>
 
     <div class="ctrl-box">
-        <button class="ctrl-btn recommend-btn" onclick="autoFillAll()">✨ 一键智能填充</button>
         <button class="ctrl-btn" onclick="saveImage()">💾 保存为图片</button>
         <button class="ctrl-btn secondary-btn" onclick="clearAll()">🗑️ 全部清空</button>
     </div>
 
-    <!-- 格子浮窗 -->
-    <div class="popover-backdrop" id="popoverBackdrop" style="display:none" onclick="hidePopover()"></div>
-    <div class="cell-popover" id="cellPopover" style="display:none">
-        <div class="popover-arrow" id="popoverArrow"></div>
-        <div class="popover-header">
-            <span class="popover-title" id="popoverTitle"></span>
-            <button class="popover-close" onclick="hidePopover()">×</button>
+    <!-- 快速搜索模态框 -->
+    <div class="quick-search-backdrop" id="quickSearchBackdrop" onclick="hideQuickSearch()"></div>
+    <div class="quick-search-popup" id="quickSearchPopup">
+        <div class="quick-search-header">
+            <div class="quick-search-header-info">
+                <div class="quick-search-title" id="quickSearchTitle">选择作品</div>
+                <div class="quick-search-subtitle">搜索或浏览推荐</div>
+            </div>
+            <button class="quick-search-close" onclick="hideQuickSearch()">✕</button>
         </div>
-        <div id="popoverCurrentSection" style="display:none">
-            <div class="popover-current">
-                <img class="popover-current-img" id="popoverCurrentImg" src="" alt="">
-                <div class="popover-current-info">
-                    <div class="popover-current-name" id="popoverCurrentName"></div>
-                    <div class="popover-current-actions">
-                        <button class="popover-action-btn" onclick="popoverCrop()">✂ 裁剪</button>
-                        <button class="popover-action-btn danger" onclick="popoverClear()">✖ 清除</button>
+        <div class="quick-search-body">
+            <div class="quick-search-input-wrap">
+                <input type="text" class="quick-search-input" id="quickSearchInput" placeholder="输入作品名称搜索..." onkeydown="if(event.key==='Enter') doQuickSearch()">
+                <button class="quick-search-btn" id="quickSearchBtn" onclick="doQuickSearch()">搜索</button>
+            </div>
+            <div class="quick-search-results" id="quickSearchResults">
+                <div class="quick-search-hint">输入关键词搜索，或点击下方「推荐」浏览热门作品</div>
+            </div>
+        </div>
+        <div class="quick-search-footer">
+            <button class="quick-search-action-btn" onclick="quickSearchShowRec()">🎲 推荐</button>
+            <button class="quick-search-action-btn" onclick="quickSearchRefresh()" id="quickSearchRefreshBtn" style="display:none">🔄 换一批</button>
+            <button class="quick-search-action-btn" onclick="quickSearchOpenFull()">🔍 高级筛选</button>
+        </div>
+    </div>
+
+    <!-- 侧边抽屉面板 -->
+    <div class="drawer-backdrop" id="drawerBackdrop" onclick="hideDrawer()"></div>
+    <div class="cell-drawer" id="cellDrawer">
+        <div class="drawer-header">
+            <div class="drawer-title">
+                <span class="drawer-title-icon">🎯</span>
+                <span id="drawerTitle">选择作品</span>
+            </div>
+            <button class="drawer-close" onclick="hideDrawer()" title="关闭 (ESC)">✕</button>
+        </div>
+        <div class="drawer-body">
+            <!-- 当前已选作品 -->
+            <div id="drawerCurrentSection" style="display:none">
+                <div class="drawer-current">
+                    <img class="drawer-current-img" id="drawerCurrentImg" src="" alt="">
+                    <div class="drawer-current-info">
+                        <div class="drawer-current-name" id="drawerCurrentName">当前作品</div>
+                        <div class="drawer-current-actions">
+                            <button class="drawer-action-btn" onclick="drawerCrop()">✂️ 裁剪调整</button>
+                            <button class="drawer-action-btn danger" onclick="drawerClear()">🗑️ 清除</button>
+                        </div>
                     </div>
                 </div>
             </div>
+            <!-- 推荐作品区 -->
+            <div class="drawer-section">
+                <div class="drawer-section-title">🔥 为你推荐</div>
+                <div class="drawer-rec-grid" id="drawerRecGrid"></div>
+            </div>
         </div>
-        <div class="popover-section-label" id="popoverRecLabel">🔥 热门推荐</div>
-        <div class="popover-grid" id="popoverGrid"></div>
-        <div class="popover-footer">
-            <button class="popover-footer-btn" id="popoverMoreBtn" onclick="popoverLoadMore()">🔄 换一批</button>
-            <button class="popover-footer-btn primary" onclick="popoverOpenFullModal()">🔍 手动选择</button>
+        <div class="drawer-footer">
+            <button class="drawer-footer-btn" id="drawerMoreBtn" onclick="drawerLoadMore()">🔄 换一批</button>
+            <button class="drawer-footer-btn primary" onclick="drawerOpenFullModal()">🔍 完整搜索</button>
         </div>
     </div>
 
@@ -1503,17 +1887,7 @@
 
     <canvas id="exportCanvas"></canvas>
 
-    <!-- 首次引导 -->
-    <div class="welcome-overlay" id="welcomeGuide" style="display:none">
-        <div class="welcome-box">
-            <div class="welcome-title">✨ 欢迎使用</div>
-            <div class="welcome-sub">60 个格子不知道填什么？<br>让系统为你推荐高分作品，你只需审阅修改</div>
-            <div class="welcome-actions">
-                <button class="welcome-btn-primary" onclick="dismissWelcomeAndFill()">🚀 一键智能填充</button>
-                <button class="welcome-btn-secondary" onclick="dismissWelcome()">✋ 我要自己填</button>
-            </div>
-        </div>
-    </div>
+
 
     <!-- 填充进度 -->
     <div class="fill-overlay" id="fillOverlay" style="display:none">
@@ -1574,8 +1948,7 @@
         { label: "受众", color: "#b2bec3", tags: ["少年", "少女", "青年", "乙女", "GL", "子供向", "女性向", "男性向", "泡面番", "全年龄", "成人向", "R18"] },
     ];
 
-    // cellTagMap 定义每个格子标签对应的推荐策略。
-    // 独立于 texts 数组，方便为不同表格模板配置不同映射。
+    // cellTagMap 定义每个格子标签对应的推荐策略，独立于 texts 数组
     const cellTagMap = {
         "入坑作":       { tags: [], sort: "heat", type: "anime" },
         "最喜欢":       { tags: [], sort: "heat", type: "anime" },
@@ -1683,25 +2056,21 @@
     const _vndbInflight = new Map();
     const VNDB_PREFETCH_STEPS = [1]; // VNDB 仅预加载后 1 页
 
-    // initGrid 创建 60 个网格格子并绑定点击事件。
+    // initGrid 创建60个网格格子并绑定点击事件
     function initGrid() {
         const container = document.getElementById("gridContainer");
         container.innerHTML = "";
         texts.forEach((text, i) => {
             const cell = document.createElement("div");
             cell.className = "grid-cell";
-            cell.onclick = () => {
-                if (cellTagMap[text]) {
-                    showPopover(i);
-                } else {
-                    openCoverPicker(i);
-                }
-            };
+            cell.dataset.index = i;
+            cell.onclick = (e) => handleCellClick(i, e);
             cell.innerHTML = `
                 <div class="cell-img-area" id="imgArea${i}">
                     <span class="placeholder">＋</span>
                 </div>
                 <div class="cell-label">${text}</div>
+                <div class="cell-hover-overlay"></div>
             `;
             container.appendChild(cell);
             renderCellImage(i, text);
@@ -1768,6 +2137,8 @@
         const area = document.getElementById(`imgArea${index}`);
         if (!area) return;
         area.innerHTML = "";
+        
+        const cell = area.closest(".grid-cell");
 
         const url = cellImages[index];
         if (!url) {
@@ -1775,8 +2146,11 @@
             placeholder.className = "placeholder";
             placeholder.textContent = "＋";
             area.appendChild(placeholder);
+            if (cell) cell.classList.remove("has-cover");
             return;
         }
+        
+        if (cell) cell.classList.add("has-cover");
 
         const crop = getCellCrop(index);
         const img = document.createElement("img");
@@ -1794,16 +2168,33 @@
         };
         area.appendChild(img);
 
-        const editBtn = document.createElement("button");
-        editBtn.className = "cover-edit-btn";
-        editBtn.type = "button";
-        editBtn.title = "裁剪封面";
-        editBtn.textContent = "✂";
-        editBtn.onclick = (e) => {
+        // 悬停工具栏：裁剪 + 清除
+        const toolbar = document.createElement("div");
+        toolbar.className = "cell-toolbar";
+        
+        const cropBtn = document.createElement("button");
+        cropBtn.className = "cell-tool-btn";
+        cropBtn.type = "button";
+        cropBtn.title = "裁剪封面";
+        cropBtn.textContent = "✂";
+        cropBtn.onclick = (e) => {
             e.stopPropagation();
             openCropModal(index);
         };
-        area.appendChild(editBtn);
+        toolbar.appendChild(cropBtn);
+        
+        const clearBtn = document.createElement("button");
+        clearBtn.className = "cell-tool-btn danger";
+        clearBtn.type = "button";
+        clearBtn.title = "清除封面";
+        clearBtn.textContent = "×";
+        clearBtn.onclick = (e) => {
+            e.stopPropagation();
+            quickClearCell(index);
+        };
+        toolbar.appendChild(clearBtn);
+        
+        area.appendChild(toolbar);
     }
 
     // loadCovers 从后端加载 covers 目录中的封面列表。
@@ -2490,8 +2881,7 @@
         document.getElementById("searchResults").scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    // downloadAndApplyCover 下载搜索结果的封面并应用到当前格子。
-    // source: "bgm" 或 "vndb"，决定后端使用哪个客户端下载。
+    // downloadAndApplyCover 下载封面并应用到当前格子，source 可为 "bgm" 或 "vndb"
     async function downloadAndApplyCover(item, source) {
         if (!item.cover) {
             alert("该作品没有封面图片");
@@ -2754,21 +3144,16 @@
         }
     }
 
-    // loadState 从服务端读取并恢复已保存的格子状态。
+    // loadState 从服务端读取并恢复已保存的格子状态
     async function loadState() {
         try {
             const resp = await fetch("/api/state");
             if (!resp.ok) return;
             const data = await resp.json();
-            if (!data.cells) {
-                showWelcomeGuide();
-                return;
-            }
-            let hasContent = false;
+            if (!data.cells) return;
             data.cells.forEach((url, i) => {
                 if (url && i < cellImages.length) {
                     cellImages[i] = url;
-                    hasContent = true;
                     if (Array.isArray(data.crops) && data.crops[i]) {
                         cellCrops[i] = clampCrop(cloneCrop(data.crops[i]));
                     } else {
@@ -2784,7 +3169,6 @@
                 }
             });
             updateProgressBar();
-            if (!hasContent) showWelcomeGuide();
         } catch (e) {
             console.warn("加载状态失败:", e);
         }
@@ -2942,20 +3326,7 @@
         document.getElementById("progressFill").style.width = pct + "%";
     }
 
-    // ---- 首次引导 ----
 
-    function showWelcomeGuide() {
-        document.getElementById("welcomeGuide").style.display = "flex";
-    }
-
-    function dismissWelcome() {
-        document.getElementById("welcomeGuide").style.display = "none";
-    }
-
-    function dismissWelcomeAndFill() {
-        document.getElementById("welcomeGuide").style.display = "none";
-        autoFillAll();
-    }
 
     // ---- 全部清空 ----
 
@@ -2968,6 +3339,17 @@
             cellSwapOffsets[i] = 0;
             renderCellImage(i);
         }
+        updateProgressBar();
+        saveState();
+    }
+
+    // quickClearCell 快捷清除单个格子的封面
+    function quickClearCell(index) {
+        cellImages[index] = null;
+        cellCrops[index] = null;
+        cellSubjectIDs[index] = null;
+        cellSwapOffsets[index] = 0;
+        renderCellImage(index);
         updateProgressBar();
         saveState();
     }
@@ -3080,104 +3462,114 @@
         }
     }
 
-    // ---- 格子浮窗推荐 ----
+    // ---- 侧边抽屉推荐 ----
 
-    let _popoverIndex = -1;
-    let _popoverOffset = 0;
-    let _popoverItems = [];
-    const POPOVER_COUNT = 8;
+    let _drawerIndex = -1;
+    let _drawerOffset = 0;
+    let _drawerItems = [];
+    const DRAWER_COUNT = 9; // 3x3 网格
 
-    function showPopover(index) {
-        _popoverIndex = index;
-        _popoverOffset = 0;
-        _popoverItems = [];
+    function showDrawer(index) {
+        _drawerIndex = index;
+        _drawerOffset = 0;
+        _drawerItems = [];
         activeCellIndex = index;
 
-        const popover = document.getElementById("cellPopover");
-        const backdrop = document.getElementById("popoverBackdrop");
-        const title = document.getElementById("popoverTitle");
+        const drawer = document.getElementById("cellDrawer");
+        const backdrop = document.getElementById("drawerBackdrop");
+        const title = document.getElementById("drawerTitle");
         title.textContent = texts[index];
 
+        // 高亮当前格子
+        document.querySelectorAll(".grid-cell").forEach((cell, i) => {
+            cell.classList.toggle("selected", i === index);
+        });
+
         // 当前封面区域
-        const currentSection = document.getElementById("popoverCurrentSection");
+        const currentSection = document.getElementById("drawerCurrentSection");
         if (cellImages[index]) {
             currentSection.style.display = "";
-            document.getElementById("popoverCurrentImg").src = cellImages[index];
-            document.getElementById("popoverCurrentName").textContent = texts[index];
+            document.getElementById("drawerCurrentImg").src = cellImages[index];
+            document.getElementById("drawerCurrentName").textContent = texts[index];
         } else {
             currentSection.style.display = "none";
         }
 
-        // 定位
-        positionPopover(index);
-        backdrop.style.display = "";
-        popover.style.display = "";
+        // 触发抽屉动画
+        requestAnimationFrame(() => {
+            backdrop.classList.add("active");
+            drawer.classList.add("active");
+        });
 
         // 加载推荐
-        loadPopoverRecommendations();
+        loadDrawerRecommendations();
+
+        // ESC 关闭
+        document.addEventListener("keydown", handleDrawerEscape);
     }
 
-    function hidePopover() {
-        document.getElementById("cellPopover").style.display = "none";
-        document.getElementById("popoverBackdrop").style.display = "none";
-        _popoverIndex = -1;
+    function hideDrawer() {
+        const drawer = document.getElementById("cellDrawer");
+        const backdrop = document.getElementById("drawerBackdrop");
+        
+        drawer.classList.remove("active");
+        backdrop.classList.remove("active");
+        
+        // 移除格子高亮
+        document.querySelectorAll(".grid-cell").forEach(cell => {
+            cell.classList.remove("selected");
+        });
+        
+        document.removeEventListener("keydown", handleDrawerEscape);
+        _drawerIndex = -1;
     }
 
-    function positionPopover(index) {
-        const cell = document.querySelectorAll(".grid-cell")[index];
-        if (!cell) return;
-        const popover = document.getElementById("cellPopover");
-        const arrow = document.getElementById("popoverArrow");
-        const rect = cell.getBoundingClientRect();
-        const scrollTop = window.scrollY || document.documentElement.scrollTop;
-        const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
-
-        // 默认显示在格子右侧
-        let left = rect.right + scrollLeft + 12;
-        let top = rect.top + scrollTop;
-        let arrowSide = "left"; // 箭头在浮窗左侧
-
-        // 如果右侧空间不足，显示在左侧
-        const popoverWidth = 380;
-        if (rect.right + popoverWidth + 24 > window.innerWidth) {
-            left = rect.left + scrollLeft - popoverWidth - 12;
-            arrowSide = "right";
+    function handleDrawerEscape(e) {
+        if (e.key === "Escape") {
+            hideDrawer();
         }
-
-        // 纵向居中对齐
-        const popoverHeight = Math.min(520, window.innerHeight * 0.8);
-        const idealTop = rect.top + scrollTop + rect.height / 2 - popoverHeight / 2;
-        top = Math.max(scrollTop + 8, Math.min(idealTop, scrollTop + window.innerHeight - popoverHeight - 8));
-
-        popover.style.left = left + "px";
-        popover.style.top = top + "px";
-
-        // 箭头位置
-        arrow.className = "popover-arrow popover-arrow-" + arrowSide;
-        const arrowTop = rect.top + scrollTop + rect.height / 2 - top;
-        arrow.style.top = Math.max(20, Math.min(arrowTop, popoverHeight - 20)) + "px";
     }
 
-    async function loadPopoverRecommendations() {
-        const index = _popoverIndex;
+    async function loadDrawerRecommendations() {
+        const index = _drawerIndex;
         if (index < 0) return;
         const label = texts[index];
         const mapping = cellTagMap[label];
-        if (!mapping) return;
+        if (!mapping) {
+            // 无推荐配置的格子显示提示
+            const grid = document.getElementById("drawerRecGrid");
+            grid.innerHTML = `
+                <div class="drawer-empty" style="grid-column: 1/-1;">
+                    <div class="drawer-empty-icon">🎨</div>
+                    <div>此格子暂无智能推荐</div>
+                    <div style="font-size:12px;margin-top:8px;color:#bbb;">点击下方「完整搜索」手动选择作品</div>
+                </div>
+            `;
+            document.getElementById("drawerMoreBtn").style.display = "none";
+            return;
+        }
 
-        const grid = document.getElementById("popoverGrid");
-        const moreBtn = document.getElementById("popoverMoreBtn");
-        grid.innerHTML = '<div class="popover-loading"><div class="spinner"></div></div>';
+        const grid = document.getElementById("drawerRecGrid");
+        const moreBtn = document.getElementById("drawerMoreBtn");
+        grid.innerHTML = `
+            <div class="drawer-loading" style="grid-column: 1/-1;">
+                <div class="spinner"></div>
+                <div>正在加载推荐...</div>
+            </div>
+        `;
 
         try {
             const body = {
-                offset: _popoverOffset,
-                limit: POPOVER_COUNT + 4,
+                offset: _drawerOffset,
+                limit: DRAWER_COUNT + 6, // 多请求一些用于过滤
                 sort: mapping.sort || "heat",
             };
             if (mapping.tags && mapping.tags.length > 0) body.tags = mapping.tags;
             if (mapping.type) body.subjectType = mapping.type;
-            if (!body.tags && !body.subjectType) body.subjectType = "anime";
+            // 如果没有标签也没有类型，默认使用动画类型
+            if ((!mapping.tags || mapping.tags.length === 0) && !mapping.type) {
+                body.subjectType = "anime";
+            }
 
             const resp = await fetch("/api/browse", {
                 method: "POST",
@@ -3185,53 +3577,111 @@
                 body: JSON.stringify(body),
             });
             const data = await resp.json();
+            
+            if (index !== _drawerIndex) return; // 用户已切换到其他格子
+            
             if (data.error) {
-                grid.innerHTML = '<div class="popover-loading">加载失败</div>';
+                grid.innerHTML = `
+                    <div class="drawer-empty" style="grid-column: 1/-1;">
+                        <div class="drawer-empty-icon">😕</div>
+                        <div>加载失败</div>
+                        <div style="font-size:12px;margin-top:8px;color:#bbb;">${escapeHtml(data.error)}</div>
+                    </div>
+                `;
+                moreBtn.style.display = "none";
                 return;
             }
 
             const items = data.results || [];
+            // 过滤已使用的作品
             const usedIDs = new Set(cellSubjectIDs.filter(id => id != null));
-            const filtered = items.filter(item => !usedIDs.has(item.id)).slice(0, POPOVER_COUNT);
-            _popoverItems = filtered;
+            const filtered = items.filter(item => !usedIDs.has(item.id)).slice(0, DRAWER_COUNT);
+            _drawerItems = filtered;
 
             if (filtered.length === 0) {
-                grid.innerHTML = '<div class="popover-loading">暂无推荐</div>';
+                grid.innerHTML = `
+                    <div class="drawer-empty" style="grid-column: 1/-1;">
+                        <div class="drawer-empty-icon">📭</div>
+                        <div>暂无更多推荐</div>
+                        <div style="font-size:12px;margin-top:8px;color:#bbb;">试试「完整搜索」探索更多作品</div>
+                    </div>
+                `;
                 moreBtn.style.display = "none";
                 return;
             }
 
             grid.innerHTML = "";
-            filtered.forEach(item => {
+            filtered.forEach((item, i) => {
                 const el = document.createElement("div");
-                el.className = "popover-item";
-                const name = item.name_cn || item.name || "";
-                const score = item.score ? `${item.score}` : "";
+                el.className = "drawer-rec-item";
+                el.style.animationDelay = `${i * 0.05}s`;
+                el.style.animation = "fadeInUp 0.4s ease forwards";
+                el.style.opacity = "0";
+                
+                const name = escapeHtml(item.name_cn || item.name || "");
+                const score = item.score ? `⭐${item.score}` : "";
+                const typeLabel = item.type_label || "";
+                
                 el.innerHTML = `
-                    ${item.cover ? `<img class="popover-item-img" src="${item.cover}" alt="${name}" loading="lazy" onerror="this.style.display='none'">` : `<div class="popover-item-img" style="display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;">无图</div>`}
-                    <div class="popover-item-name" title="${name}">${name}</div>
-                    ${score ? `<div class="popover-item-score">⭐${score}</div>` : ""}
+                    ${item.cover 
+                        ? `<img class="drawer-rec-img" src="${escapeHtml(item.cover)}" alt="${name}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 3 4%22><rect fill=%22%23f0f0f0%22 width=%223%22 height=%224%22/><text x=%221.5%22 y=%222.2%22 font-size=%220.5%22 text-anchor=%22middle%22 fill=%22%23ccc%22>无图</text></svg>'">`
+                        : `<div class="drawer-rec-img" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:16px;">📷</div>`
+                    }
+                    <div class="drawer-rec-info">
+                        <div class="drawer-rec-name" title="${name}">${name}</div>
+                        <div class="drawer-rec-meta">
+                            ${score ? `<span class="drawer-rec-score">${score}</span>` : ""}
+                            ${typeLabel ? `<span class="drawer-rec-type">${escapeHtml(typeLabel)}</span>` : ""}
+                        </div>
+                    </div>
                 `;
-                el.onclick = () => popoverSelectItem(item);
+                el.onclick = () => drawerSelectItem(item);
                 grid.appendChild(el);
             });
-            _popoverOffset += items.length;
-            moreBtn.style.display = items.length >= POPOVER_COUNT ? "" : "none";
+            
+            _drawerOffset += items.length;
+            moreBtn.style.display = items.length >= DRAWER_COUNT ? "" : "none";
         } catch (e) {
-            grid.innerHTML = '<div class="popover-loading">加载失败</div>';
+            if (index !== _drawerIndex) return;
+            grid.innerHTML = `
+                <div class="drawer-empty" style="grid-column: 1/-1;">
+                    <div class="drawer-empty-icon">⚠️</div>
+                    <div>网络错误</div>
+                    <div style="font-size:12px;margin-top:8px;color:#bbb;">${escapeHtml(e.message)}</div>
+                </div>
+            `;
         }
     }
 
-    function popoverLoadMore() {
-        loadPopoverRecommendations();
+    // HTML 转义防止 XSS
+    function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
-    async function popoverSelectItem(item) {
-        const index = _popoverIndex;
+    function drawerLoadMore() {
+        const btn = document.getElementById("drawerMoreBtn");
+        btn.classList.add("pulse");
+        setTimeout(() => btn.classList.remove("pulse"), 300);
+        loadDrawerRecommendations();
+    }
+
+    async function drawerSelectItem(item) {
+        const index = _drawerIndex;
         if (index < 0) return;
 
-        const grid = document.getElementById("popoverGrid");
-        grid.innerHTML = '<div class="popover-loading"><div class="spinner"></div></div>';
+        const grid = document.getElementById("drawerRecGrid");
+        grid.innerHTML = `
+            <div class="drawer-loading" style="grid-column: 1/-1;">
+                <div class="spinner"></div>
+                <div>正在下载封面...</div>
+            </div>
+        `;
 
         try {
             const displayName = item.name_cn || item.name || "cover";
@@ -3242,59 +3692,351 @@
                 body: JSON.stringify({ url: item.cover, filename: `${safeName}_${item.id}`, source: "bgm" }),
             });
             const dlData = await dlResp.json();
+            
+            if (index !== _drawerIndex) return;
+            
             if (dlData.error) {
                 alert("下载封面失败: " + dlData.error);
-                loadPopoverRecommendations();
+                loadDrawerRecommendations();
                 return;
             }
 
             cellImages[index] = "covers/" + encodeURIComponent(dlData.filename);
             cellCrops[index] = defaultCrop();
             cellSubjectIDs[index] = item.id;
+            
+            // 添加成功动画
+            const cell = document.querySelectorAll(".grid-cell")[index];
+            if (cell) {
+                cell.classList.add("success-pop");
+                setTimeout(() => cell.classList.remove("success-pop"), 400);
+            }
+            
             renderCellImage(index, displayName);
-            hidePopover();
+            hideDrawer();
             await loadCovers();
             updateProgressBar();
             saveState();
         } catch (e) {
+            if (index !== _drawerIndex) return;
             alert("选择失败: " + e.message);
-            loadPopoverRecommendations();
+            loadDrawerRecommendations();
         }
     }
 
-    function popoverOpenFullModal() {
-        const index = _popoverIndex;
-        hidePopover();
+    function drawerOpenFullModal() {
+        const index = _drawerIndex;
+        hideDrawer();
         openCoverPicker(index);
     }
 
-    function popoverCrop() {
-        const index = _popoverIndex;
+    function drawerCrop() {
+        const index = _drawerIndex;
         if (index < 0 || !cellImages[index]) return;
-        hidePopover();
+        hideDrawer();
         openCropModal(index);
     }
 
-    function popoverClear() {
-        const index = _popoverIndex;
+    function drawerClear() {
+        const index = _drawerIndex;
         if (index < 0) return;
         cellImages[index] = null;
         cellCrops[index] = null;
         cellSubjectIDs[index] = null;
         cellSwapOffsets[index] = 0;
         renderCellImage(index);
-        hidePopover();
+        hideDrawer();
         saveState();
         updateProgressBar();
     }
 
-    // 窗口滚动/resize 时重新定位浮窗
-    window.addEventListener("scroll", () => {
-        if (_popoverIndex >= 0) positionPopover(_popoverIndex);
-    });
-    window.addEventListener("resize", () => {
-        if (_popoverIndex >= 0) positionPopover(_popoverIndex);
-    });
+    // ---- 快速搜索模态框 ----
+
+    let _quickSearchIndex = -1;
+    let _quickSearchVersion = 0;
+    let _quickSearchTimer = null;
+    let _quickSearchOffset = 0;
+    let _quickSearchItems = [];
+
+    // handleCellClick 处理格子点击事件
+    function handleCellClick(index, event) {
+        if (event.target.classList.contains("cell-tool-btn")) return;
+        
+        if (cellImages[index]) {
+            showDrawer(index);
+        } else {
+            showQuickSearch(index);
+        }
+    }
+
+    // showQuickSearch 显示快速搜索模态框
+    function showQuickSearch(index) {
+        _quickSearchIndex = index;
+        activeCellIndex = index;
+        _quickSearchVersion++;
+        _quickSearchOffset = 0;
+        _quickSearchItems = [];
+        
+        const backdrop = document.getElementById("quickSearchBackdrop");
+        const popup = document.getElementById("quickSearchPopup");
+        const title = document.getElementById("quickSearchTitle");
+        const input = document.getElementById("quickSearchInput");
+        const results = document.getElementById("quickSearchResults");
+        const refreshBtn = document.getElementById("quickSearchRefreshBtn");
+        
+        title.textContent = texts[index];
+        input.value = "";
+        results.innerHTML = '<div class="quick-search-hint">输入关键词搜索，或点击下方「推荐」浏览热门作品</div>';
+        refreshBtn.style.display = "none";
+        
+        document.querySelectorAll(".grid-cell").forEach((c, i) => {
+            c.classList.toggle("selected", i === index);
+        });
+        
+        requestAnimationFrame(() => {
+            backdrop.classList.add("active");
+            popup.classList.add("active");
+            input.focus();
+        });
+        
+        document.addEventListener("keydown", handleQuickSearchEscape);
+    }
+
+    // hideQuickSearch 隐藏快速搜索模态框
+    function hideQuickSearch() {
+        const backdrop = document.getElementById("quickSearchBackdrop");
+        const popup = document.getElementById("quickSearchPopup");
+        
+        backdrop.classList.remove("active");
+        popup.classList.remove("active");
+        
+        document.querySelectorAll(".grid-cell").forEach(c => c.classList.remove("selected"));
+        document.removeEventListener("keydown", handleQuickSearchEscape);
+        
+        _quickSearchIndex = -1;
+    }
+
+    // handleQuickSearchEscape ESC键关闭
+    function handleQuickSearchEscape(e) {
+        if (e.key === "Escape") hideQuickSearch();
+    }
+
+    // doQuickSearch 执行快速搜索
+    function doQuickSearch() {
+        const keyword = document.getElementById("quickSearchInput").value.trim();
+        if (!keyword) return;
+        
+        _quickSearchOffset = 0;
+        clearTimeout(_quickSearchTimer);
+        _quickSearchTimer = setTimeout(() => executeQuickSearch(keyword), 200);
+    }
+
+    // executeQuickSearch 实际执行搜索请求
+    async function executeQuickSearch(keyword) {
+        const version = ++_quickSearchVersion;
+        const results = document.getElementById("quickSearchResults");
+        const btn = document.getElementById("quickSearchBtn");
+        const refreshBtn = document.getElementById("quickSearchRefreshBtn");
+        
+        results.innerHTML = '<div class="quick-search-loading"><div class="spinner"></div>搜索中...</div>';
+        btn.disabled = true;
+        
+        try {
+            const resp = await fetch("/api/browse", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ keyword, limit: 12, sort: "match" })
+            });
+            const data = await resp.json();
+            
+            if (version !== _quickSearchVersion) return;
+            
+            if (data.error) {
+                results.innerHTML = `<div class="quick-search-empty">❌ ${escapeHtml(data.error)}</div>`;
+                refreshBtn.style.display = "none";
+                return;
+            }
+            
+            const items = data.results || [];
+            if (items.length === 0) {
+                results.innerHTML = '<div class="quick-search-empty">没有找到相关作品</div>';
+                refreshBtn.style.display = "none";
+                return;
+            }
+            
+            _quickSearchItems = items;
+            renderQuickSearchResults(items);
+            refreshBtn.style.display = "none";
+        } catch (e) {
+            if (version !== _quickSearchVersion) return;
+            results.innerHTML = `<div class="quick-search-empty">⚠️ 网络错误</div>`;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // renderQuickSearchResults 渲染快速搜索结果（列表布局）
+    function renderQuickSearchResults(items) {
+        const results = document.getElementById("quickSearchResults");
+        results.innerHTML = "";
+        
+        const list = document.createElement("div");
+        list.className = "qs-list";
+        
+        items.forEach(item => {
+            const el = document.createElement("div");
+            el.className = "qs-item";
+            
+            const name = escapeHtml(item.name_cn || item.name || "");
+            const score = item.score ? item.score.toFixed(1) : "";
+            const typeLabel = item.type_label || "";
+            const summary = item.summary ? escapeHtml(item.summary) : "";
+            
+            el.innerHTML = `
+                <div class="qs-item-cover">
+                    ${item.cover 
+                        ? `<img src="${escapeHtml(item.cover)}" alt="" loading="lazy">`
+                        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:18px;">📷</div>`
+                    }
+                </div>
+                <div class="qs-item-body">
+                    <div class="qs-item-name" title="${name}">${name}</div>
+                    <div class="qs-item-meta">
+                        ${score ? `<span class="qs-item-score">⭐${score}</span>` : ""}
+                        ${typeLabel ? `<span class="qs-item-type">${escapeHtml(typeLabel)}</span>` : ""}
+                    </div>
+                    ${summary ? `<div class="qs-item-desc">${summary}</div>` : ""}
+                </div>
+            `;
+            el.onclick = () => quickSearchSelectItem(item);
+            list.appendChild(el);
+        });
+        
+        results.appendChild(list);
+    }
+
+    // quickSearchSelectItem 选择快速搜索结果
+    async function quickSearchSelectItem(item) {
+        const index = _quickSearchIndex;
+        if (index < 0 || !item.cover) {
+            if (!item.cover) alert("该作品没有封面");
+            return;
+        }
+        
+        const results = document.getElementById("quickSearchResults");
+        results.innerHTML = '<div class="quick-search-loading"><div class="spinner"></div>正在下载封面...</div>';
+        
+        try {
+            const displayName = item.name_cn || item.name || "cover";
+            const safeName = displayName.replace(/[<>:"\/\\|?*\s]/g, "_").substring(0, 60);
+            
+            const resp = await fetch("/api/download-cover", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: item.cover, filename: `${safeName}_${item.id}`, source: "bgm" })
+            });
+            const data = await resp.json();
+            
+            if (data.error) {
+                alert("下载失败: " + data.error);
+                renderQuickSearchResults(_quickSearchItems);
+                return;
+            }
+            
+            cellImages[index] = "covers/" + encodeURIComponent(data.filename);
+            cellCrops[index] = defaultCrop();
+            if (typeof item.id === "number") cellSubjectIDs[index] = item.id;
+            
+            const cell = document.querySelectorAll(".grid-cell")[index];
+            if (cell) {
+                cell.classList.add("success-pop");
+                setTimeout(() => cell.classList.remove("success-pop"), 400);
+            }
+            
+            renderCellImage(index, displayName);
+            hideQuickSearch();
+            await loadCovers();
+            updateProgressBar();
+            saveState();
+        } catch (e) {
+            alert("选择失败: " + e.message);
+            renderQuickSearchResults(_quickSearchItems);
+        }
+    }
+
+    // quickSearchShowRec 显示推荐作品
+    async function quickSearchShowRec() {
+        const index = _quickSearchIndex;
+        if (index < 0) return;
+        
+        const label = texts[index];
+        const mapping = cellTagMap[label];
+        
+        const version = ++_quickSearchVersion;
+        const results = document.getElementById("quickSearchResults");
+        const refreshBtn = document.getElementById("quickSearchRefreshBtn");
+        
+        results.innerHTML = '<div class="quick-search-loading"><div class="spinner"></div>加载推荐作品...</div>';
+        
+        try {
+            const body = { offset: _quickSearchOffset, limit: 12, sort: "heat" };
+            if (mapping) {
+                if (mapping.tags && mapping.tags.length > 0) body.tags = mapping.tags;
+                if (mapping.type) body.subjectType = mapping.type;
+                body.sort = mapping.sort || "heat";
+            }
+            if (!body.tags && !body.subjectType) body.subjectType = "anime";
+            
+            const resp = await fetch("/api/browse", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            
+            if (version !== _quickSearchVersion) return;
+            
+            if (data.error) {
+                results.innerHTML = `<div class="quick-search-empty">❌ ${escapeHtml(data.error)}</div>`;
+                refreshBtn.style.display = "none";
+                return;
+            }
+            
+            const items = data.results || [];
+            const usedIDs = new Set(cellSubjectIDs.filter(id => id != null));
+            const filtered = items.filter(item => !usedIDs.has(item.id));
+            
+            if (filtered.length === 0) {
+                results.innerHTML = '<div class="quick-search-empty">暂无更多推荐</div>';
+                refreshBtn.style.display = "none";
+                return;
+            }
+            
+            _quickSearchItems = filtered;
+            _quickSearchOffset += items.length;
+            renderQuickSearchResults(filtered);
+            refreshBtn.style.display = "";
+        } catch (e) {
+            if (version !== _quickSearchVersion) return;
+            results.innerHTML = '<div class="quick-search-empty">⚠️ 网络错误</div>';
+        }
+    }
+
+    // quickSearchRefresh 换一批推荐
+    function quickSearchRefresh() {
+        quickSearchShowRec();
+    }
+
+    // quickSearchOpenFull 打开完整搜索弹窗
+    function quickSearchOpenFull() {
+        const index = _quickSearchIndex;
+        hideQuickSearch();
+        openCoverPicker(index);
+    }
+
+    // 兼容旧函数名（如果有其他地方调用）
+    function showPopover(index) { showDrawer(index); }
+    function hidePopover() { hideDrawer(); }
 
     // 启动流程：初始化网格、标签浏览器，再加载封面和状态。
     initGrid();
